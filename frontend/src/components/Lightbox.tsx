@@ -3,8 +3,9 @@ import { canSharePhotos, downloadPhoto, sharePhoto } from '../api/photos'
 import '../lightbox-download.css'
 import type { Photo } from '../types'
 
-function DownloadButtons({ uuid }: { uuid: string }) {
+function DownloadButtons({ uuid, onDelete }: { uuid: string; onDelete?: (uuid: string) => Promise<void> }) {
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'error'>('idle')
+  const [deleteState, setDeleteState] = useState<'idle' | 'busy' | 'error'>('idle')
 
   const handleShare = async () => {
     setShareState('busy')
@@ -14,6 +15,20 @@ function DownloadButtons({ uuid }: { uuid: string }) {
       setShareState('idle')
     } catch {
       setShareState('error')
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!onDelete || !window.confirm('Obrisati ovu fotografiju? Ovo se ne može poništiti.')) {
+      return
+    }
+
+    setDeleteState('busy')
+
+    try {
+      await onDelete(uuid)
+    } catch {
+      setDeleteState('error')
     }
   }
 
@@ -44,6 +59,19 @@ function DownloadButtons({ uuid }: { uuid: string }) {
           </span>
         </button>
       )}
+
+      {onDelete && (
+        <button
+          type="button"
+          className={`lightbox-download lightbox-delete${deleteState === 'error' ? ' is-error' : ''}`}
+          onClick={handleDelete}
+          disabled={deleteState === 'busy'}
+        >
+          <span>
+            {deleteState === 'busy' ? 'Brišem…' : deleteState === 'error' ? 'Nije uspjelo' : 'Obriši'}
+          </span>
+        </button>
+      )}
     </div>
   )
 }
@@ -53,11 +81,12 @@ interface LightboxProps {
   index: number
   onClose: () => void
   onNavigate: (index: number) => void
+  onDelete?: (uuid: string) => Promise<void>
 }
 
 const SWIPE_THRESHOLD_PX = 50
 
-export function Lightbox({ photos, index, onClose, onNavigate }: LightboxProps) {
+export function Lightbox({ photos, index, onClose, onNavigate, onDelete }: LightboxProps) {
   const touchStartX = useRef<number | null>(null)
   const photo = photos[index]
   const hasPrevious = index > 0
@@ -124,7 +153,7 @@ export function Lightbox({ photos, index, onClose, onNavigate }: LightboxProps) 
 
       <img className="lightbox-photo" src={photo.web_url} alt="" onClick={onClose} />
 
-      <DownloadButtons key={photo.uuid} uuid={photo.uuid} />
+      <DownloadButtons key={photo.uuid} uuid={photo.uuid} onDelete={onDelete} />
 
       {hasNext && (
         <button

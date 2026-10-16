@@ -86,6 +86,20 @@ export async function fetchPhotoStatus(uuid: string): Promise<PhotoStatus | null
   return body?.status ?? null
 }
 
+/**
+ * Admin only: delete a photo (row and files). Throws ApiError when refused.
+ */
+export async function deletePhoto(uuid: string, adminToken: string): Promise<void> {
+  const response = await fetch(resolveUrl(`/api/photos/${uuid}`), {
+    method: 'DELETE',
+    headers: { 'X-Admin-Token': adminToken },
+  })
+
+  if (!response.ok) {
+    throw new ApiError(response.status, 'Brisanje nije uspjelo.')
+  }
+}
+
 export function downloadUrl(uuid: string): string {
   return resolveUrl(`/api/photos/${uuid}/download`)
 }

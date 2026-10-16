@@ -39,3 +39,9 @@
   background: #fecaca;
   color: #7f1d1d;
 }
+
+/* Admin only. Shown next to the guest buttons, but styled apart from them. */
+.lightbox-delete {
+  background: #0f172a;
+  color: #fff;
+}

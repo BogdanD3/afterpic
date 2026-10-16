@@ -133,6 +133,10 @@ export function useGallery() {
     setPhotos((current) => prependNewest(current, [photo]))
   }, [])
 
+  const removePhoto = useCallback((uuid: string) => {
+    setPhotos((current) => current.filter((photo) => photo.uuid !== uuid))
+  }, [])
+
   return {
     photos,
     isLoading,
@@ -140,5 +144,6 @@ export function useGallery() {
     hasMore: nextPath !== null,
     loadMore,
     addPhoto,
+    removePhoto,
   }
 }
