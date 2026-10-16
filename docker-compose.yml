@@ -58,6 +58,7 @@ services:
       PHOTOS_RETENTION_ENABLED: ${PHOTOS_RETENTION_ENABLED:-true}
       PHOTOS_RETENTION_DAYS: ${PHOTOS_RETENTION_DAYS:-30}
       PHOTOS_DISK_WARNING_PERCENT: ${PHOTOS_DISK_WARNING_PERCENT:-90}
+      PHOTOS_ADMIN_TOKEN: ${PHOTOS_ADMIN_TOKEN:-}
     volumes:
       # Originals, processed photos, logs and framework cache.
       - photo-gallery-storage:/var/www/html/storage
