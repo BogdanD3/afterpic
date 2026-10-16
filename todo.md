@@ -52,9 +52,14 @@ You are testing on your phone. Still to check:
 - Two phones uploading at the same moment: do both photos appear on both phones? (tests the live-update fix)
 - Upload speed on mobile data.
 
-### 4. Admin: delete and hide photos (M), later
+### 4. Admin: delete and hide photos (M), delete done, hide still open
 
-Until then, use the manual delete commands. Needs an admin login (a single shared secret is enough to start), delete (row and both folders), and optionally hide or "approve before showing".
+Delete is done: `DELETE /api/photos/{uuid}` with the `X-Admin-Token` header (the value of `PHOTOS_ADMIN_TOKEN`, empty turns it off). In the gallery the admin opens `/?admin=TOKEN` once, then "Obriši" appears in the lightbox. It removes the row and both folders and works for pending and failed photos too. The nightly retention uses the same delete code.
+
+Still open:
+- Hide or "approve before showing".
+- Deleted photos stay visible on other open phones until they reload, because polling does not report deletions.
+- A pending photo deleted while its job is running can get its files written again by that job.
 
 ---
 

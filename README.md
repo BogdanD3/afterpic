@@ -85,6 +85,7 @@ Main environment variables (see `backend/.env.example` and `backend/deploy/.env.
 | `PHOTOS_RETENTION_ENABLED` | Delete old photos every night (default true).             |
 | `PHOTOS_RETENTION_DAYS`    | Age in days after which photos are deleted (default 30).  |
 | `PHOTOS_DISK_WARNING_PERCENT` | Disk usage that logs a warning (default 90).           |
+| `PHOTOS_ADMIN_TOKEN`       | Shared secret for deleting photos. Empty turns it off.    |
 | `VITE_API_URL`             | Backend origin, set when building the frontend.           |
 
 ## Deployment
