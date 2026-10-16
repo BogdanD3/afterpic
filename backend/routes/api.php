@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PhotoController;
+use App\Http\Middleware\RequirePhotoAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/photos', [PhotoController::class, 'store'])
@@ -23,3 +24,8 @@ Route::get('/photos/{uuid}/download', [PhotoController::class, 'download'])
     ->whereUuid('uuid')
     ->middleware('throttle:photo-downloads')
     ->name('photos.download');
+
+Route::delete('/photos/{uuid}', [PhotoController::class, 'destroy'])
+    ->whereUuid('uuid')
+    ->middleware(['throttle:photo-admin', RequirePhotoAdmin::class])
+    ->name('photos.destroy');

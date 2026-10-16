@@ -211,6 +211,24 @@ class PhotoController extends Controller
     }
 
     /**
+     * Delete a photo and its files. Admin only (see RequirePhotoAdmin).
+     *
+     * Any status can be deleted, so pending and failed photos can be removed too.
+     */
+    public function destroy(string $uuid): Response
+    {
+        $photo = Photo::where('uuid', $uuid)->firstOrFail();
+
+        if (! $photo->deleteWithFiles()) {
+            return response()->json([
+                'message' => 'The server could not delete the photo. Try again.',
+            ], 500);
+        }
+
+        return response()->noContent();
+    }
+
+    /**
      * Download the high quality copy of a processed photo.
      *
      * New photos have a JPEG download copy (see config photos.download). Photos

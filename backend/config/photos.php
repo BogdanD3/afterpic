@@ -28,6 +28,14 @@ return [
     // can share one Wi-Fi address, so this is generous.
     'download_rate_limit' => (int) env('PHOTOS_DOWNLOAD_RATE_LIMIT', 120),
 
+    // Shared secret for admin actions such as deleting a photo. Guests have
+    // no accounts, so the admin sends it in the X-Admin-Token header. When
+    // it is empty, the admin routes answer 404 to everyone.
+    'admin_token' => env('PHOTOS_ADMIN_TOKEN'),
+
+    // Admin requests per IP address per minute, which slows down guessing the token.
+    'admin_rate_limit' => (int) env('PHOTOS_ADMIN_RATE_LIMIT', 20),
+
     /*
     |--------------------------------------------------------------------------
     | Derived images

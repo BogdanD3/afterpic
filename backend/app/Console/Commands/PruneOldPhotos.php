@@ -6,9 +6,6 @@ use App\Models\Photo;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Throwable;
 
 #[Signature('app:prune-old-photos {--dry-run : Only list the photos that would be deleted}')]
 #[Description('Delete photos older than the retention period (database row and files)')]
@@ -49,7 +46,7 @@ class PruneOldPhotos extends Command
                         continue;
                     }
 
-                    $this->deletePhoto($photo) ? $deleted++ : $failed++;
+                    $photo->deleteWithFiles() ? $deleted++ : $failed++;
                 }
             });
 
@@ -68,31 +65,5 @@ class PruneOldPhotos extends Command
         }
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * Remove both photo folders, then the row.
-     *
-     * The row goes last, so a photo whose files could not be removed is
-     * found again (and retried) on the next run instead of leaving orphan files.
-     */
-    private function deletePhoto(Photo $photo): bool
-    {
-        $directory = dirname($photo->original_path);
-
-        try {
-            Storage::disk('local')->deleteDirectory($directory);
-            Storage::disk('public')->deleteDirectory($directory);
-            $photo->delete();
-        } catch (Throwable $exception) {
-            Log::error('Could not delete an old photo', [
-                'photo_uuid' => $photo->uuid,
-                'exception' => $exception->getMessage(),
-            ]);
-
-            return false;
-        }
-
-        return true;
     }
 }
