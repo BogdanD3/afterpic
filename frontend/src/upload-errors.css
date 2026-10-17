@@ -1,0 +1,22 @@
+/* Failed upload tile: the photo stays visible, faded, behind the reason. */
+
+.tile-failed {
+  position: relative;
+}
+
+.tile-failed img.tile-failed-preview {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  filter: grayscale(1);
+}
+
+.tile-failed > span,
+.tile-failed > button {
+  position: relative;
+}
+
+.tile-failed > span {
+  font-weight: 600;
+  line-height: 1.3;
+}

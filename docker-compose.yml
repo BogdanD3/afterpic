@@ -1,0 +1,69 @@
+services:
+  db:
+    image: mariadb:lts
+    container_name: photo-gallery-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-photo_gallery}
+      MARIADB_USER: ${DB_USERNAME:-photo_gallery}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    volumes:
+      - photo-gallery-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  app:
+    build: .
+    image: photo-gallery:latest
+    container_name: photo-gallery-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # Only the host Nginx can reach it; it is not exposed to the network.
+    ports:
+      - "127.0.0.1:${APP_PORT:-9002}:80"
+    environment:
+      APP_NAME: "Photo Gallery"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Set APP_KEY in .env}
+      APP_URL: ${APP_URL:?Set APP_URL in .env}
+      FRONTEND_URL: ${APP_URL}
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: warning
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:-photo_gallery}
+      DB_USERNAME: ${DB_USERNAME:-photo_gallery}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_DRIVER: file
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      DB_QUEUE_RETRY_AFTER: "180"
+      FILESYSTEM_DISK: local
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      PHOTOS_MAX_UPLOAD_KB: ${PHOTOS_MAX_UPLOAD_KB:-51200}
+      PHOTOS_MAX_PIXELS: ${PHOTOS_MAX_PIXELS:-60000000}
+      PHOTOS_UPLOAD_RATE_LIMIT: ${PHOTOS_UPLOAD_RATE_LIMIT:-30}
+      PHOTOS_DOWNLOAD_MAX_EDGE: ${PHOTOS_DOWNLOAD_MAX_EDGE:-3000}
+      PHOTOS_DOWNLOAD_QUALITY: ${PHOTOS_DOWNLOAD_QUALITY:-90}
+      PHOTOS_KEEP_ORIGINALS: ${PHOTOS_KEEP_ORIGINALS:-false}
+      PHOTOS_RETENTION_ENABLED: ${PHOTOS_RETENTION_ENABLED:-true}
+      PHOTOS_RETENTION_DAYS: ${PHOTOS_RETENTION_DAYS:-30}
+      PHOTOS_DISK_WARNING_PERCENT: ${PHOTOS_DISK_WARNING_PERCENT:-90}
+    volumes:
+      # Originals, processed photos, logs and framework cache.
+      - photo-gallery-storage:/var/www/html/storage
+
+volumes:
+  photo-gallery-db:
+    name: PhotoGallery-DB
+  photo-gallery-storage:
+    name: PhotoGallery-Storage
