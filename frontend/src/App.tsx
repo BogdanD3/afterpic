@@ -12,9 +12,14 @@ export default function App() {
   const { photos, removePhoto } = gallery
   const uploads = useUploads(gallery.addPhoto)
   const adminToken = useAdminToken()
-  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  // The open photo is kept by uuid, so it stays the same photo when others
+  // are added or deleted, and the lightbox closes when it is deleted itself.
+  const [openUuid, setOpenUuid] = useState<string | null>(null)
+  const openIndex = openUuid === null ? -1 : photos.findIndex((photo) => photo.uuid === openUuid)
 
-  const closeLightbox = useCallback(() => setOpenIndex(null), [])
+  const closeLightbox = useCallback(() => setOpenUuid(null), [])
+
+  const openPhotoAt = useCallback((index: number) => setOpenUuid(photos[index]?.uuid ?? null), [photos])
 
   const handleDelete = useCallback(
     async (uuid: string) => {
@@ -28,13 +33,9 @@ export default function App() {
       removePhoto(uuid)
 
       // The next photo moves into the deleted one's place; step back only at the end.
-      const remaining = photos.length - 1
+      const remaining = photos.filter((photo) => photo.uuid !== uuid)
 
-      if (remaining === 0) {
-        setOpenIndex(null)
-      } else if (deletedIndex !== -1) {
-        setOpenIndex(Math.min(deletedIndex, remaining - 1))
-      }
+      setOpenUuid(remaining[Math.min(deletedIndex, remaining.length - 1)]?.uuid ?? null)
     },
     [adminToken, photos, removePhoto],
   )
@@ -54,19 +55,19 @@ export default function App() {
           isLoading={gallery.isLoading}
           hasMore={gallery.hasMore}
           onLoadMore={gallery.loadMore}
-          onOpen={setOpenIndex}
+          onOpen={openPhotoAt}
           onDismissUpload={uploads.removeItem}
         />
       </main>
 
       <CameraButton onFiles={uploads.enqueue} />
 
-      {openIndex !== null && (
+      {openIndex !== -1 && (
         <Lightbox
           photos={gallery.photos}
           index={openIndex}
           onClose={closeLightbox}
-          onNavigate={setOpenIndex}
+          onNavigate={openPhotoAt}
           onDelete={adminToken ? handleDelete : undefined}
         />
       )}

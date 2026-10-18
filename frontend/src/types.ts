@@ -17,6 +17,8 @@ export interface UpdatesPage {
   data: Photo[]
   cursor: string
   has_more: boolean
+  // Uuids of photos deleted since the last poll, to remove from the gallery.
+  deleted: string[]
 }
 
 export interface SinglePhoto {

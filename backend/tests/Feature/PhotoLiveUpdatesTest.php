@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Photo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -50,7 +51,7 @@ class PhotoLiveUpdatesTest extends TestCase
         $this->getJson($this->updatesUrl(0))
             ->assertOk()
             ->assertJsonPath('has_more', false)
-            ->assertJsonStructure(['data', 'cursor', 'has_more']);
+            ->assertJsonStructure(['data', 'cursor', 'has_more', 'deleted']);
     }
 
     public function test_next_cursor_moves_past_the_returned_photos_and_since_moves_to_now(): void
@@ -129,6 +130,53 @@ class PhotoLiveUpdatesTest extends TestCase
         $before = $this->getJson($this->updatesUrl(999))->headers->get('ETag');
 
         $photo->forceFill(['updated_at' => now()])->save();
+
+        $after = $this->getJson($this->updatesUrl(999))->headers->get('ETag');
+
+        $this->assertNotSame($before, $after);
+    }
+
+    public function test_photos_deleted_since_the_last_poll_are_listed(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $deleted = Photo::factory()->create();
+        $kept = Photo::factory()->create();
+        $since = now()->subSeconds(30)->timestamp;
+
+        $deleted->deleteWithFiles();
+
+        $this->getJson($this->updatesUrl($kept->id, $since))
+            ->assertOk()
+            ->assertJsonPath('deleted', [$deleted->uuid]);
+    }
+
+    public function test_deletions_before_since_are_not_listed_again(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        Photo::factory()->create()->deleteWithFiles();
+
+        $this->travel(5)->minutes();
+
+        $this->getJson($this->updatesUrl(0, now()->subMinute()->timestamp))
+            ->assertOk()
+            ->assertJsonPath('deleted', []);
+    }
+
+    public function test_etag_changes_when_a_photo_is_deleted(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $photo = Photo::factory()->create(['updated_at' => now()->subMinute()]);
+        Photo::factory()->create(['updated_at' => now()->subMinute()]);
+
+        $before = $this->getJson($this->updatesUrl(999))->headers->get('ETag');
+
+        $photo->deleteWithFiles();
 
         $after = $this->getJson($this->updatesUrl(999))->headers->get('ETag');
 

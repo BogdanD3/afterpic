@@ -6,6 +6,7 @@ use App\Models\Photo;
 use App\Services\ImageProcessor;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -23,6 +24,11 @@ class ProcessPhotoJob implements ShouldQueue
      */
     public array $backoff = [10, 60, 300];
 
+    /**
+     * A photo deleted before the job starts needs no processing.
+     */
+    public bool $deleteWhenMissingModels = true;
+
     public function __construct(public Photo $photo) {}
 
     /**
@@ -34,24 +40,45 @@ class ProcessPhotoJob implements ShouldQueue
 
         $result = $processor->process($originalPath);
 
-        $directory = dirname($this->photo->original_path);
-        $webPath = "{$directory}/web.webp";
-        $thumbPath = "{$directory}/thumb.webp";
+        if ($this->storeResult($result)) {
+            $this->removeOriginalUnlessKept();
+        }
+    }
 
-        Storage::disk('public')->put($webPath, $result['web']);
-        Storage::disk('public')->put($thumbPath, $result['thumb']);
-        Storage::disk('local')->put(Photo::downloadPathFor($this->photo->original_path), $result['download']);
+    /**
+     * Write the files and mark the photo processed, unless it was deleted
+     * while it was being processed. The row lock is the same one
+     * Photo::deleteWithFiles takes, so a delete waits for this or the other
+     * way round, and files are never written for a deleted photo.
+     *
+     * @param  array{width: int, height: int, web: string, thumb: string, download: string}  $result
+     */
+    private function storeResult(array $result): bool
+    {
+        return DB::transaction(function () use ($result): bool {
+            if (! Photo::whereKey($this->photo->getKey())->lockForUpdate()->exists()) {
+                return false;
+            }
 
-        $this->photo->update([
-            'status' => Photo::STATUS_PROCESSED,
-            'web_path' => $webPath,
-            'thumb_path' => $thumbPath,
-            'width' => $result['width'],
-            'height' => $result['height'],
-            'web_size_bytes' => strlen($result['web']),
-        ]);
+            $directory = dirname($this->photo->original_path);
+            $webPath = "{$directory}/web.webp";
+            $thumbPath = "{$directory}/thumb.webp";
 
-        $this->removeOriginalUnlessKept();
+            Storage::disk('public')->put($webPath, $result['web']);
+            Storage::disk('public')->put($thumbPath, $result['thumb']);
+            Storage::disk('local')->put(Photo::downloadPathFor($this->photo->original_path), $result['download']);
+
+            $this->photo->update([
+                'status' => Photo::STATUS_PROCESSED,
+                'web_path' => $webPath,
+                'thumb_path' => $thumbPath,
+                'width' => $result['width'],
+                'height' => $result['height'],
+                'web_size_bytes' => strlen($result['web']),
+            ]);
+
+            return true;
+        });
     }
 
     /**

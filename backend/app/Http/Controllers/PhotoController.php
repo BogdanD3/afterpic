@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -115,6 +116,10 @@ class PhotoController extends Controller
      *
      * `has_more` is true when the limit cut the list short: the next cursor
      * then keeps the old `since`, so nothing is skipped.
+     *
+     * `deleted` lists the uuids of photos deleted at or after `since` (by an
+     * admin or the nightly retention), so open pages remove them. Like the
+     * photos, it can repeat a uuid; the client ignores ones it does not show.
      */
     public function updates(Request $request): JsonResponse
     {
@@ -133,6 +138,14 @@ class PhotoController extends Controller
 
         $latestId = (int) Photo::processed()->max('id');
         $latestChange = (string) Photo::processed()->max('updated_at');
+        $latestDeletionId = (int) DB::table('photo_deletions')->max('id');
+
+        $deleted = DB::table('photo_deletions')
+            ->where('deleted_at', '>=', Carbon::createFromTimestamp($since))
+            ->orderBy('id')
+            ->pluck('uuid')
+            ->unique()
+            ->values();
 
         $photos = Photo::processed()
             ->where(function (Builder $query) use ($afterId, $since): void {
@@ -155,10 +168,11 @@ class PhotoController extends Controller
             ->additional([
                 'cursor' => $nextCursor,
                 'has_more' => $hasMore,
+                'deleted' => $deleted,
             ])
             ->response($request);
 
-        $response->setEtag(md5("{$afterId}:{$since}:{$latestId}:{$latestChange}"));
+        $response->setEtag(md5("{$afterId}:{$since}:{$latestId}:{$latestChange}:{$latestDeletionId}"));
         $response->isNotModified($request);
 
         return $response;

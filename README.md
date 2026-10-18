@@ -8,7 +8,7 @@ A public photo gallery for parties and events. Guests open the page on their pho
 2. When the photo is taken, the phone prepares it: photos larger than 4000 px on the long side (for example 200 MP) are scaled down to 4000 px and saved as a quality 92 JPEG, which looks the same and is a few MB instead of 30-60 MB. Normal photos are sent untouched. The frontend then uploads it right away (with a progress indicator and up to 3 retries on network errors).
 3. The backend validates the file, stores the original, and queues a job.
 4. A queue worker converts the photo to a 1600px WebP and a 400px thumbnail. EXIF data, including GPS location, is removed.
-5. The gallery polls the API every 5 seconds and shows new photos at the top. The first gallery page returns an encrypted `updates_cursor`, and every poll answer returns the next `cursor`, so no internal ids reach the browser.
+5. The gallery polls the API every 5 seconds and shows new photos at the top. The first gallery page returns an encrypted `updates_cursor`, and every poll answer returns the next `cursor`, so no internal ids reach the browser. Each poll answer also lists photos deleted since the last poll (`deleted`), so a photo removed by the admin or the nightly retention disappears on every open phone.
 
 ## Tech stack
 

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessPhotoJob;
 use App\Models\Photo;
+use App\Services\ImageProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -44,6 +46,40 @@ class PhotoDeleteTest extends TestCase
 
         $this->getJson('/api/photos')->assertOk()->assertJsonCount(0, 'data');
         $this->getJson("/api/photos/{$photo->uuid}")->assertNotFound();
+    }
+
+    public function test_deletion_is_logged_for_the_live_feed(): void
+    {
+        $photo = $this->storedPhoto();
+
+        $this->deleteJson("/api/photos/{$photo->uuid}", [], $this->adminHeaders())->assertNoContent();
+
+        $this->assertDatabaseHas('photo_deletions', ['uuid' => $photo->uuid]);
+    }
+
+    public function test_photo_deleted_while_it_is_processed_gets_no_files_written_back(): void
+    {
+        $photo = Photo::factory()->pending()->create();
+        Storage::disk('local')->put($photo->original_path, 'original');
+
+        // The admin deletes the photo after decoding started, before the files are written.
+        $processor = new class($photo) extends ImageProcessor
+        {
+            public function __construct(private Photo $photo) {}
+
+            public function process(string $sourcePath): array
+            {
+                $this->photo->deleteWithFiles();
+
+                return ['width' => 10, 'height' => 10, 'web' => 'web', 'thumb' => 'thumb', 'download' => 'download'];
+            }
+        };
+
+        (new ProcessPhotoJob($photo))->handle($processor);
+
+        $this->assertDatabaseMissing('photos', ['uuid' => $photo->uuid]);
+        Storage::disk('local')->assertMissing("photos/{$photo->uuid}");
+        Storage::disk('public')->assertMissing("photos/{$photo->uuid}");
     }
 
     public function test_pending_and_failed_photos_can_be_deleted_too(): void
@@ -107,6 +143,7 @@ class PhotoDeleteTest extends TestCase
             ->assertInternalServerError();
 
         $this->assertDatabaseHas('photos', ['uuid' => $photo->uuid]);
+        $this->assertDatabaseMissing('photo_deletions', ['uuid' => $photo->uuid]);
     }
 
     public function test_admin_requests_are_rate_limited_per_ip(): void

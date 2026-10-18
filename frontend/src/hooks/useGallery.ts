@@ -79,11 +79,15 @@ export function useGallery() {
 
         cursorRef.current = updates.cursor
 
-        if (updates.data.length === 0) {
+        if (updates.data.length === 0 && updates.deleted.length === 0) {
           return
         }
 
-        setPhotos((current) => prependNewest(current, updates.data))
+        const deleted = new Set(updates.deleted)
+
+        setPhotos((current) =>
+          prependNewest(current, updates.data).filter((photo) => !deleted.has(photo.uuid)),
+        )
       } catch (error) {
         // The server no longer accepts the cursor (e.g. a new APP_KEY after a
         // deploy): start over from the first page. Otherwise keep the current
