@@ -30,21 +30,23 @@ class ImageProcessor
     {
         $image = $this->manager->read(new SplFileInfo($sourcePath))->orient();
 
+        // Scale the full-size photo down once (in place) and make the smaller
+        // copies from that. Cloning the full-size image for every copy would
+        // hold it in memory several times (4 bytes per pixel each).
+        $downloadEdge = (int) config('photos.download.max_edge');
+        $image->scaleDown(width: $downloadEdge, height: $downloadEdge);
+
         $webEdge = (int) config('photos.web.max_edge');
         $thumbSize = (int) config('photos.thumb.size');
 
         $webImage = (clone $image)->scaleDown(width: $webEdge, height: $webEdge);
         $web = $webImage->encode(new WebpEncoder(quality: (int) config('photos.web.quality')));
 
-        $thumb = (clone $image)
+        $thumb = (clone $webImage)
             ->cover($thumbSize, $thumbSize)
             ->encode(new WebpEncoder(quality: (int) config('photos.thumb.quality')));
 
-        $downloadEdge = (int) config('photos.download.max_edge');
-
-        $download = (clone $image)
-            ->scaleDown(width: $downloadEdge, height: $downloadEdge)
-            ->encode(new JpegEncoder(quality: (int) config('photos.download.quality')));
+        $download = $image->encode(new JpegEncoder(quality: (int) config('photos.download.quality')));
 
         return [
             'width' => $webImage->width(),

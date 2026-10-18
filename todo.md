@@ -18,6 +18,7 @@ Effort guide: **S** = under half a day, **M** = a day or two, **L** = several da
 | **Upload error messages** | Clear Bosnian messages: too big, too many pixels, HEIC, not an image, server problem, rate limit. The failed tile shows the faded photo |
 | **Fast failure report** | `GET /api/photos/{uuid}/status`: the uploader sees "processing failed" within seconds, not after 3 minutes |
 | **One-command tests** | `bash scripts/test.sh <url>`: 67 backend tests (run inside the app's Docker image), frontend lint and build, and a 23-check live test (`scripts/smoke-test.sh`). Backend tests, lint and build pass; the live test was updated for the new polling cursor but not yet run (see item 2) |
+| **Large photos (up to 200 MP)** | The phone scales photos above 4000 px on the long side down before upload (quality 92 JPEG, no EXIF), so a 200 MP photo is sent as about 12 MP and a few MB. Normal photos are sent untouched. HEIC is converted to JPEG when the browser can decode it. The server scales a photo down once before making the copies: a 48 MP photo is processed in 1.2 s with 267 MB peak memory instead of 3.0 s and 458 MB |
 | **Manual clean-up** | Documented commands to delete one photo or all photos (database row plus both folders) |
 | **Retention** | `app:prune-old-photos` runs every night at 03:30 and deletes photos older than `PHOTOS_RETENTION_DAYS` (default 30): the database row and both folders. `--dry-run` only lists them. `PHOTOS_RETENTION_ENABLED=false` turns it off. A photo whose files cannot be deleted is kept and retried the next night |
 | **Disk space warning** | `app:check-disk-space` runs every hour and logs a warning when the storage disk is at least `PHOTOS_DISK_WARNING_PERCENT` full (default 90) |
@@ -47,7 +48,8 @@ The backup script and retention are written and tested here, but not yet on the 
 
 You are testing on your phone. Still to check:
 - Does `capture="environment"` open the camera directly on iPhone and Android?
-- Do iPhone photos upload (HEIC is rejected by the app)?
+- Do iPhone photos upload? Safari should convert HEIC to JPEG on the phone now.
+- A 200 MP photo: how long does "Pripremam…" take, and does the photo look right?
 - **Download and Podijeli** on both platforms: where does the file end up, does the quality look right?
 - Two phones uploading at the same moment: do both photos appear on both phones? (tests the live-update fix)
 - Upload speed on mobile data.

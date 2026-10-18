@@ -14,12 +14,10 @@ interface PhotoGridProps {
 }
 
 function UploadTile({ upload, onDismiss }: { upload: UploadItem; onDismiss: (id: string) => void }) {
-  const isFailed = upload.status === 'failed'
-
-  if (isFailed) {
+  if (upload.status === 'failed') {
     return (
       <div className="tile tile-failed" role="alert">
-        <img className="tile-failed-preview" src={upload.previewUrl} alt="" />
+        {upload.previewUrl && <img className="tile-failed-preview" src={upload.previewUrl} alt="" />}
         <span>{upload.error}</span>
         <button type="button" className="tile-dismiss" onClick={() => onDismiss(upload.id)}>
           Ukloni
@@ -28,12 +26,12 @@ function UploadTile({ upload, onDismiss }: { upload: UploadItem; onDismiss: (id:
     )
   }
 
-  const label = upload.status === 'uploading' ? 'Šaljem…' : 'Obrađujem…'
+  const label = { preparing: 'Pripremam…', uploading: 'Šaljem…', processing: 'Obrađujem…' }[upload.status]
   const percent = Math.round(upload.progress * 100)
 
   return (
     <div className="tile tile-upload" role="status" aria-label={label}>
-      <img src={upload.previewUrl} alt="" />
+      {upload.previewUrl && <img src={upload.previewUrl} alt="" />}
       <span className="tile-label">{label}</span>
       {upload.status === 'uploading' && (
         <div className="progress" aria-hidden="true">

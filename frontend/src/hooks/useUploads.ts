@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, fetchPhoto, fetchPhotoStatus, uploadPhoto, validateFile } from '../api/photos'
+import { preparePhoto } from '../api/preparePhoto'
 import type { Photo } from '../types'
 import { POLL_INTERVAL_MS } from './useGallery'
 
-export type UploadStatus = 'uploading' | 'processing' | 'failed'
+export type UploadStatus = 'preparing' | 'uploading' | 'processing' | 'failed'
 
 export interface UploadItem {
   id: string
-  previewUrl: string
+  // Set once the photo is prepared, so a huge original is never shown as a preview.
+  previewUrl?: string
   status: UploadStatus
   progress: number
   uuid?: string
@@ -27,6 +29,7 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
   const itemsRef = useRef(items)
   const onProcessedRef = useRef(onProcessed)
   const queueRef = useRef<Promise<void>>(Promise.resolve())
+  const prepareQueueRef = useRef<Promise<unknown>>(Promise.resolve())
 
   useEffect(() => {
     itemsRef.current = items
@@ -39,7 +42,9 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
 
   const removeItem = useCallback((id: string) => {
     setItems((current) => {
-      current.filter((item) => item.id === id).forEach((item) => URL.revokeObjectURL(item.previewUrl))
+      current
+        .filter((item) => item.id === id && item.previewUrl)
+        .forEach((item) => URL.revokeObjectURL(item.previewUrl as string))
 
       return current.filter((item) => item.id !== id)
     })
@@ -73,26 +78,44 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
     (files: File[]) => {
       for (const file of files) {
         const id = crypto.randomUUID()
-        const validationError = validateFile(file)
 
         const item: UploadItem = {
           id,
-          previewUrl: URL.createObjectURL(file),
-          status: validationError ? 'failed' : 'uploading',
+          status: 'preparing',
           progress: 0,
-          error: validationError ?? undefined,
           startedAt: Date.now(),
         }
 
         setItems((current) => [item, ...current])
 
-        if (!validationError) {
-          // Uploads run one after another so a slow mobile connection is not flooded.
-          queueRef.current = queueRef.current.then(() => sendFile(id, file))
-        }
+        // Photos are prepared one at a time (a 200 MP photo needs a lot of
+        // memory to decode), while the previous one may still be uploading.
+        const prepared = prepareQueueRef.current.then(async () => {
+          const ready = await preparePhoto(file)
+          const validationError = validateFile(ready)
+
+          updateItem(id, {
+            previewUrl: URL.createObjectURL(ready),
+            status: validationError ? 'failed' : 'uploading',
+            error: validationError ?? undefined,
+          })
+
+          return validationError ? null : ready
+        })
+
+        prepareQueueRef.current = prepared
+
+        // Uploads run one after another so a slow mobile connection is not flooded.
+        queueRef.current = queueRef.current.then(async () => {
+          const ready = await prepared
+
+          if (ready) {
+            await sendFile(id, ready)
+          }
+        })
       }
     },
-    [sendFile],
+    [sendFile, updateItem],
   )
 
   // Uploaded photos show up in the gallery through polling, but the owner's
