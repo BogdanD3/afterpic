@@ -42,7 +42,7 @@ AGENTS.md   Project goals and guidelines
 - Formats: JPEG, PNG, WebP. The server does not read HEIC; the phone converts it to JPEG when its browser can decode HEIC (Safari can), otherwise it is rejected.
 - Any photo the phone can decode can be uploaded: it is scaled down to at most 4000 px on the long side before sending (`frontend/src/api/preparePhoto.ts`).
 - Server limits, for uploads the phone could not prepare: 50 MB and 60 megapixels.
-- Rate limit: 30 uploads per hour per IP address.
+- Rate limit: 100 uploads per hour per IP address.
 
 All limits are configurable in `backend/config/photos.php` and through environment variables.
 
@@ -82,7 +82,7 @@ Main environment variables (see `backend/.env.example` and `backend/deploy/.env.
 | `TRUSTED_PROXIES`          | Reverse proxy addresses, so the real client IP is used.   |
 | `PHOTOS_MAX_UPLOAD_KB`     | Upload size limit in kilobytes (default 51200).           |
 | `PHOTOS_MAX_PIXELS`        | Maximum width x height (default 60,000,000).              |
-| `PHOTOS_UPLOAD_RATE_LIMIT` | Uploads per IP per hour (default 30).                     |
+| `PHOTOS_UPLOAD_RATE_LIMIT` | Uploads per IP per hour (default 100).                    |
 | `PHOTOS_RETENTION_ENABLED` | Delete old photos every night (default true).             |
 | `PHOTOS_RETENTION_DAYS`    | Age in days after which photos are deleted (default 30).  |
 | `PHOTOS_DISK_WARNING_PERCENT` | Disk usage that logs a warning (default 90).           |

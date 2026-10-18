@@ -100,9 +100,9 @@ Polling every 5 seconds works. Laravel Reverb or Server-Sent Events would make p
 
 ## P2: quality and polish
 
-### 12. Upload rate limit (S), parked
+### 12. Upload rate limit (S), in progress
 
-30 uploads per hour per IP. You decided it is fine for now because most guests use mobile data. If a party shares one Wi-Fi, raise `PHOTOS_UPLOAD_RATE_LIMIT` in `.env`. Rejected uploads also count against the limit.
+100 uploads per hour per IP (raised from 30 on 2026-10-18). Next: temporarily block an address that overuses it. If a party shares one Wi-Fi, raise `PHOTOS_UPLOAD_RATE_LIMIT` in `.env`. Rejected uploads also count against the limit.
 
 ### 13. Automated checks (M)
 

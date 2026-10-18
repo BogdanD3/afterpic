@@ -22,7 +22,7 @@ return [
     'max_pixels' => (int) env('PHOTOS_MAX_PIXELS', 60_000_000),
 
     // Uploads allowed per IP address per hour.
-    'upload_rate_limit' => (int) env('PHOTOS_UPLOAD_RATE_LIMIT', 30),
+    'upload_rate_limit' => (int) env('PHOTOS_UPLOAD_RATE_LIMIT', 100),
 
     // Original-photo downloads allowed per IP address per minute. Many guests
     // can share one Wi-Fi address, so this is generous.
