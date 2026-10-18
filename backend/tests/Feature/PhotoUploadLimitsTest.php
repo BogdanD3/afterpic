@@ -76,12 +76,15 @@ class PhotoUploadLimitsTest extends TestCase
 
     public function test_a_blocked_phone_does_not_block_other_phones(): void
     {
-        config(['photos.upload_limits.burst' => 1]);
+        config(['photos.upload_limits.burst' => 2]);
 
-        $device = $this->newDevice();
-        $this->upload($device)->assertTooManyRequests();
+        $blocked = $this->newDevice();
+        $this->upload($blocked)->assertAccepted();
+        $this->upload($blocked)->assertTooManyRequests();
 
-        $this->upload($this->newDevice())->assertAccepted();
+        // A second upload stays within the other phone's own burst of 2.
+        $other = $this->newDevice();
+        $this->upload($other)->assertAccepted();
     }
 
     public function test_a_second_burst_blocks_the_phone_for_an_hour(): void
