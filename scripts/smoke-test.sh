@@ -233,9 +233,9 @@ UUID=""
 if [ "$STATUS" = "202" ] && UUID="$(jget "$WORK/upload.body" uuid)" && [ -n "$UUID" ]; then
     ok "upload accepted with HTTP 202 (uuid $UUID)"
     REMAINING="$(header upload x-ratelimit-remaining)"
-    [ -n "$REMAINING" ] && printf '        uploads left for this IP this hour: %s\n' "$REMAINING"
+    [ -n "$REMAINING" ] && printf '        uploads left for this device this hour: %s\n' "$REMAINING"
 elif [ "$STATUS" = "429" ]; then
-    bad "upload accepted with HTTP 202" "rate limit reached (HTTP 429). Wait, or raise PHOTOS_UPLOAD_RATE_LIMIT in .env"
+    bad "upload accepted with HTTP 202" "rate limit reached (HTTP 429). Wait, or raise PHOTOS_UPLOAD_IP_RATE_LIMIT in .env"
 elif [ "$STATUS" = "413" ]; then
     bad "upload accepted with HTTP 202" "HTTP 413: nginx client_max_body_size is too small somewhere in the chain"
 else

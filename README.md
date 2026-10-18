@@ -42,7 +42,7 @@ AGENTS.md   Project goals and guidelines
 - Formats: JPEG, PNG, WebP. The server does not read HEIC; the phone converts it to JPEG when its browser can decode HEIC (Safari can), otherwise it is rejected.
 - Any photo the phone can decode can be uploaded: it is scaled down to at most 4000 px on the long side before sending (`frontend/src/api/preparePhoto.ts`).
 - Server limits, for uploads the phone could not prepare: 50 MB and 60 megapixels.
-- Rate limit: 100 uploads per hour per IP address.
+- Rate limits count per phone, not per IP address, so guests on one Wi-Fi do not share a limit. Each phone gets a random signed device id in an HttpOnly cookie on its first upload. A phone may upload 100 photos per hour. More than 20 in 5 minutes blocks that phone for 15 minutes (1 hour if it happens again within 12 hours). All phones on one IP together are limited to 1000 per hour, and to 200 new device ids per hour, which stops scripts that drop the cookie.
 
 All limits are configurable in `backend/config/photos.php` and through environment variables.
 
@@ -82,7 +82,9 @@ Main environment variables (see `backend/.env.example` and `backend/deploy/.env.
 | `TRUSTED_PROXIES`          | Reverse proxy addresses, so the real client IP is used.   |
 | `PHOTOS_MAX_UPLOAD_KB`     | Upload size limit in kilobytes (default 51200).           |
 | `PHOTOS_MAX_PIXELS`        | Maximum width x height (default 60,000,000).              |
-| `PHOTOS_UPLOAD_RATE_LIMIT` | Uploads per IP per hour (default 100).                    |
+| `PHOTOS_UPLOAD_RATE_LIMIT` | Uploads per phone per hour (default 100).                 |
+| `PHOTOS_UPLOAD_BURST_LIMIT` | Uploads per phone in 5 minutes before a block (default 20). |
+| `PHOTOS_UPLOAD_IP_RATE_LIMIT` | Uploads per IP per hour, all phones together (default 1000). |
 | `PHOTOS_RETENTION_ENABLED` | Delete old photos every night (default true).             |
 | `PHOTOS_RETENTION_DAYS`    | Age in days after which photos are deleted (default 30).  |
 | `PHOTOS_DISK_WARNING_PERCENT` | Disk usage that logs a warning (default 90).           |

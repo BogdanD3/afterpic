@@ -29,6 +29,7 @@ return [
 
     'max_age' => 600,
 
-    'supports_credentials' => false,
+    // Uploads send the device cookie (see LimitPhotoUploads).
+    'supports_credentials' => true,
 
 ];

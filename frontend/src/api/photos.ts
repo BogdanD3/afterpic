@@ -183,6 +183,10 @@ function parseBody(text: string): unknown {
   }
 }
 
+interface RateLimitBody extends ErrorBody {
+  retry_after?: number
+}
+
 interface ValidationBody extends ErrorBody {
   errors?: { photo?: string[] }
 }
@@ -215,7 +219,11 @@ function validationMessage(body: unknown): string {
 
 function uploadErrorMessage(status: number, body: unknown): string {
   if (status === 429) {
-    return 'Previše slika u kratkom roku. Pokušajte kasnije.'
+    const seconds = (body as RateLimitBody | null)?.retry_after
+
+    return seconds
+      ? `Previše slika u kratkom roku. Pokušajte ponovo za ${Math.ceil(seconds / 60)} min.`
+      : 'Previše slika u kratkom roku. Pokušajte kasnije.'
   }
 
   if (status === 413) {
@@ -244,6 +252,8 @@ export function uploadPhoto(file: File, onProgress: (fraction: number) => void):
     const request = new XMLHttpRequest()
 
     request.open('POST', resolveUrl('/api/photos'))
+    // Sends the device cookie the upload limits count by, also when the API is on another origin.
+    request.withCredentials = true
     request.setRequestHeader('Accept', 'application/json')
 
     request.upload.onprogress = (event) => {

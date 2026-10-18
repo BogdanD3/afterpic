@@ -21,8 +21,40 @@ return [
     // Width * height limit, checked before decoding (decompression bomb guard).
     'max_pixels' => (int) env('PHOTOS_MAX_PIXELS', 60_000_000),
 
-    // Uploads allowed per IP address per hour.
-    'upload_rate_limit' => (int) env('PHOTOS_UPLOAD_RATE_LIMIT', 100),
+    /*
+    |--------------------------------------------------------------------------
+    | Upload limits per phone
+    |--------------------------------------------------------------------------
+    |
+    | Guests have no accounts, so each phone gets a random, signed device id
+    | in a cookie on its first upload (see LimitPhotoUploads). Limits count
+    | per device, so guests sharing one Wi-Fi (or one mobile carrier address)
+    | do not use up each other's uploads.
+    |
+    | per_device_per_hour: normal hourly allowance for one phone.
+    | burst / burst_minutes: more than `burst` uploads within `burst_minutes`
+    | is not a person tapping the camera, so the phone is blocked for
+    | block_minutes, and for repeat_block_minutes if it happens again within
+    | strikes_reset_hours.
+    |
+    | per_ip_per_hour is only a safety net for scripts that drop the cookie;
+    | it is high enough for a whole party on one Wi-Fi. A script without a
+    | cookie gets a new device id every time, so handing out new ids is
+    | limited per IP too.
+    |
+    */
+
+    'upload_limits' => [
+        'per_device_per_hour' => (int) env('PHOTOS_UPLOAD_RATE_LIMIT', 100),
+        'burst' => (int) env('PHOTOS_UPLOAD_BURST_LIMIT', 20),
+        'burst_minutes' => 5,
+        'block_minutes' => 15,
+        'repeat_block_minutes' => 60,
+        'strikes_reset_hours' => 12,
+        'per_ip_per_hour' => (int) env('PHOTOS_UPLOAD_IP_RATE_LIMIT', 1000),
+        'new_devices_per_ip_per_hour' => 200,
+        'device_cookie_days' => 30,
+    ],
 
     // Original-photo downloads allowed per IP address per minute. Many guests
     // can share one Wi-Fi address, so this is generous.

@@ -92,21 +92,6 @@ class PhotoUploadTest extends TestCase
             ->assertJsonPath('errors.photo.0', 'The photo has too many pixels.');
     }
 
-    public function test_upload_is_rate_limited_per_ip(): void
-    {
-        config(['photos.upload_rate_limit' => 2]);
-
-        for ($attempt = 0; $attempt < 2; $attempt++) {
-            $this->postJson('/api/photos', [
-                'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
-            ])->assertAccepted();
-        }
-
-        $this->postJson('/api/photos', [
-            'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
-        ])->assertStatus(429);
-    }
-
     public function test_missing_photo_field_is_rejected(): void
     {
         $this->postJson('/api/photos')

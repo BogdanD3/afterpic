@@ -19,6 +19,7 @@ Effort guide: **S** = under half a day, **M** = a day or two, **L** = several da
 | **Fast failure report** | `GET /api/photos/{uuid}/status`: the uploader sees "processing failed" within seconds, not after 3 minutes |
 | **One-command tests** | `bash scripts/test.sh <url>`: 67 backend tests (run inside the app's Docker image), frontend lint and build, and a 23-check live test (`scripts/smoke-test.sh`). Backend tests, lint and build pass; the live test was updated for the new polling cursor but not yet run (see item 2) |
 | **Large photos (up to 200 MP)** | The phone scales photos above 4000 px on the long side down before upload (quality 92 JPEG, no EXIF), so a 200 MP photo is sent as about 12 MP and a few MB. Normal photos are sent untouched. HEIC is converted to JPEG when the browser can decode it. The server scales a photo down once before making the copies: a 48 MP photo is processed in 1.2 s with 267 MB peak memory instead of 3.0 s and 458 MB |
+| **Upload limits per phone** | Limits count per phone (signed `photo_device` cookie), not per IP, so a shared Wi-Fi or mobile carrier address is no longer one shared limit. 100 per hour per phone; more than 20 in 5 minutes blocks the phone for 15 minutes, 1 hour if repeated. Safety net per IP: 1000 uploads and 200 new device ids per hour |
 | **Manual clean-up** | Documented commands to delete one photo or all photos (database row plus both folders) |
 | **Retention** | `app:prune-old-photos` runs every night at 03:30 and deletes photos older than `PHOTOS_RETENTION_DAYS` (default 30): the database row and both folders. `--dry-run` only lists them. `PHOTOS_RETENTION_ENABLED=false` turns it off. A photo whose files cannot be deleted is kept and retried the next night |
 | **Disk space warning** | `app:check-disk-space` runs every hour and logs a warning when the storage disk is at least `PHOTOS_DISK_WARNING_PERCENT` full (default 90) |
@@ -99,10 +100,6 @@ Polling every 5 seconds works. Laravel Reverb or Server-Sent Events would make p
 ---
 
 ## P2: quality and polish
-
-### 12. Upload rate limit (S), in progress
-
-100 uploads per hour per IP (raised from 30 on 2026-10-18). Next: temporarily block an address that overuses it. If a party shares one Wi-Fi, raise `PHOTOS_UPLOAD_RATE_LIMIT` in `.env`. Rejected uploads also count against the limit.
 
 ### 13. Automated checks (M)
 

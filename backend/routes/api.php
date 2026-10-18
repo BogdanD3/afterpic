@@ -1,11 +1,12 @@
 <?php
 
 use App\Http\Controllers\PhotoController;
+use App\Http\Middleware\LimitPhotoUploads;
 use App\Http\Middleware\RequirePhotoAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/photos', [PhotoController::class, 'store'])
-    ->middleware('throttle:photo-uploads')
+    ->middleware(LimitPhotoUploads::class)
     ->name('photos.store');
 
 Route::get('/photos', [PhotoController::class, 'index'])->name('photos.index');
