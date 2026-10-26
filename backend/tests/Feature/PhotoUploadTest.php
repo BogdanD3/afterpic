@@ -92,6 +92,44 @@ class PhotoUploadTest extends TestCase
             ->assertJsonPath('errors.photo.0', 'The photo has too many pixels.');
     }
 
+    public function test_retry_with_the_same_upload_id_returns_the_first_photo_instead_of_a_duplicate(): void
+    {
+        $uploadId = fake()->uuid();
+
+        $first = $this->postJson('/api/photos', [
+            'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
+            'upload_id' => $uploadId,
+        ])->assertAccepted();
+
+        $retry = $this->postJson('/api/photos', [
+            'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
+            'upload_id' => $uploadId,
+        ])->assertAccepted();
+
+        $this->assertSame($first->json('uuid'), $retry->json('uuid'));
+        $this->assertDatabaseCount('photos', 1);
+    }
+
+    public function test_different_upload_ids_are_different_photos(): void
+    {
+        foreach ([fake()->uuid(), fake()->uuid()] as $uploadId) {
+            $this->postJson('/api/photos', [
+                'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
+                'upload_id' => $uploadId,
+            ])->assertAccepted();
+        }
+
+        $this->assertDatabaseCount('photos', 2);
+    }
+
+    public function test_malformed_upload_id_is_rejected(): void
+    {
+        $this->postJson('/api/photos', [
+            'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
+            'upload_id' => 'not-a-uuid',
+        ])->assertUnprocessable()->assertJsonValidationErrorFor('upload_id');
+    }
+
     public function test_missing_photo_field_is_rejected(): void
     {
         $this->postJson('/api/photos')

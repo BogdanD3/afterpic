@@ -129,7 +129,8 @@ class LimitPhotoUploads
             ->withValue("{$device}.{$this->sign($device)}")
             ->withExpires(now()->addDays($days))
             ->withPath('/api')
-            ->withSecure($request->isSecure())
+            // Behind the proxies PHP sees plain HTTP, so APP_URL decides.
+            ->withSecure($request->isSecure() || str_starts_with((string) config('app.url'), 'https://'))
             ->withHttpOnly(true)
             ->withSameSite(Cookie::SAMESITE_LAX);
     }

@@ -56,16 +56,16 @@ return [
         'device_cookie_days' => 30,
     ],
 
-    // Original-photo downloads allowed per IP address per minute. Many guests
-    // can share one Wi-Fi address, so this is generous.
-    'download_rate_limit' => (int) env('PHOTOS_DOWNLOAD_RATE_LIMIT', 120),
+    // Original-photo downloads allowed per IP address per minute. A whole
+    // party can share one Wi-Fi or mobile carrier address, so this is generous.
+    'download_rate_limit' => (int) env('PHOTOS_DOWNLOAD_RATE_LIMIT', 600),
 
     // Shared secret for admin actions such as deleting a photo. Guests have
     // no accounts, so the admin sends it in the X-Admin-Token header. When
     // it is empty, the admin routes answer 404 to everyone.
     'admin_token' => env('PHOTOS_ADMIN_TOKEN'),
 
-    // Admin requests per IP address per minute, which slows down guessing the token.
+    // Wrong admin tokens allowed per IP address per minute, which slows down guessing.
     'admin_rate_limit' => (int) env('PHOTOS_ADMIN_RATE_LIMIT', 20),
 
     /*

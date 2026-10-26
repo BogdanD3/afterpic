@@ -27,6 +27,7 @@ class Photo extends Model
      */
     protected $fillable = [
         'uuid',
+        'upload_id',
         'status',
         'original_path',
         'web_path',

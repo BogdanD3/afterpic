@@ -28,5 +28,5 @@ Route::get('/photos/{uuid}/download', [PhotoController::class, 'download'])
 
 Route::delete('/photos/{uuid}', [PhotoController::class, 'destroy'])
     ->whereUuid('uuid')
-    ->middleware(['throttle:photo-admin', RequirePhotoAdmin::class])
+    ->middleware(RequirePhotoAdmin::class)
     ->name('photos.destroy');

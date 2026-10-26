@@ -31,6 +31,7 @@ class StorePhotoRequest extends FormRequest
                 'max:'.config('photos.max_upload_kb'),
                 'mimetypes:'.implode(',', config('photos.allowed_mimes')),
             ],
+            'upload_id' => ['nullable', 'uuid'],
         ];
     }
 

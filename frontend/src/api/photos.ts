@@ -243,13 +243,41 @@ function uploadErrorMessage(status: number, body: unknown): string {
   return message ?? 'Slanje nije uspjelo. Pokušajte ponovo.'
 }
 
+/** An upload that makes no progress for this long is cut off and retried. */
+const UPLOAD_STALL_TIMEOUT_MS = 30_000
+
+/**
+ * True for errors worth retrying: no connection (0) and a busy or restarting
+ * server or proxy (502-504). Safe to retry because the upload id makes the
+ * server return the first photo instead of storing a second one.
+ */
+export function isRetryableUploadError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 0 || (error.status >= 502 && error.status <= 504))
+}
+
 /**
  * Upload one photo. XMLHttpRequest is used instead of fetch because fetch
  * does not report upload progress.
+ *
+ * `uploadId` is the same for every attempt of one photo. When a response is
+ * lost after the server stored the photo, the retry gets that photo back
+ * instead of creating a duplicate.
  */
-export function uploadPhoto(file: File, onProgress: (fraction: number) => void): Promise<UploadResult> {
+export function uploadPhoto(
+  file: File,
+  uploadId: string,
+  onProgress: (fraction: number) => void,
+): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
+    let stallTimer: number | undefined
+
+    // A phone that loses signal mid-upload can leave the request hanging
+    // forever, which would block every photo queued after it.
+    const restartStallTimer = () => {
+      window.clearTimeout(stallTimer)
+      stallTimer = window.setTimeout(() => request.abort(), UPLOAD_STALL_TIMEOUT_MS)
+    }
 
     request.open('POST', resolveUrl('/api/photos'))
     // Sends the device cookie the upload limits count by, also when the API is on another origin.
@@ -257,12 +285,15 @@ export function uploadPhoto(file: File, onProgress: (fraction: number) => void):
     request.setRequestHeader('Accept', 'application/json')
 
     request.upload.onprogress = (event) => {
+      restartStallTimer()
+
       if (event.lengthComputable) {
         onProgress(event.loaded / event.total)
       }
     }
 
     request.onload = () => {
+      window.clearTimeout(stallTimer)
       const body = parseBody(request.responseText)
 
       if (request.status === 202) {
@@ -275,11 +306,18 @@ export function uploadPhoto(file: File, onProgress: (fraction: number) => void):
     }
 
     request.onerror = () => {
+      window.clearTimeout(stallTimer)
       reject(new ApiError(0, 'Greška na mreži. Pokušajte ponovo.'))
+    }
+
+    request.onabort = () => {
+      reject(new ApiError(0, 'Veza je prekinuta. Pokušajte ponovo.'))
     }
 
     const form = new FormData()
     form.append('photo', file)
+    form.append('upload_id', uploadId)
+    restartStallTimer()
     request.send(form)
   })
 }

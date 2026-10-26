@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, fetchPhoto, fetchPhotoStatus, uploadPhoto, validateFile } from '../api/photos'
+import { fetchPhoto, fetchPhotoStatus, isRetryableUploadError, uploadPhoto, validateFile } from '../api/photos'
 import { preparePhoto } from '../api/preparePhoto'
 import type { Photo } from '../types'
 import { POLL_INTERVAL_MS } from './useGallery'
@@ -14,11 +14,19 @@ export interface UploadItem {
   progress: number
   uuid?: string
   error?: string
-  startedAt: number
+  // When the server accepted the photo. Processing time is counted from here,
+  // so a slow upload or a long queue before it does not count against it.
+  processingSince?: number
 }
 
-const MAX_NETWORK_ATTEMPTS = 3
-const PROCESSING_TIMEOUT_MS = 3 * 60 * 1000
+// Waits before the 2nd and 3rd attempt, so a phone with a weak signal gets a
+// moment to reconnect instead of failing three times in a row.
+const RETRY_DELAYS_MS = [2000, 5000]
+const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Nepoznata greška.'
@@ -52,22 +60,25 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
 
   const sendFile = useCallback(
     async (id: string, file: File) => {
-      for (let attempt = 1; attempt <= MAX_NETWORK_ATTEMPTS; attempt++) {
+      for (let attempt = 0; ; attempt++) {
         try {
-          const { uuid } = await uploadPhoto(file, (progress) => updateItem(id, { progress }))
+          // The item id is the upload id, so every retry of this photo is recognised.
+          const { uuid } = await uploadPhoto(file, id, (progress) => updateItem(id, { progress }))
 
-          updateItem(id, { status: 'processing', uuid, progress: 1 })
+          updateItem(id, { status: 'processing', uuid, progress: 1, processingSince: Date.now() })
 
           return
         } catch (error) {
-          const isNetworkError = error instanceof ApiError && error.status === 0
-          const canRetry = isNetworkError && attempt < MAX_NETWORK_ATTEMPTS
+          const delay = RETRY_DELAYS_MS[attempt]
 
-          if (!canRetry) {
+          if (!isRetryableUploadError(error) || delay === undefined) {
             updateItem(id, { status: 'failed', error: errorMessage(error) })
 
             return
           }
+
+          updateItem(id, { progress: 0 })
+          await wait(delay)
         }
       }
     },
@@ -83,7 +94,6 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
           id,
           status: 'preparing',
           progress: 0,
-          startedAt: Date.now(),
         }
 
         setItems((current) => [item, ...current])
@@ -125,7 +135,7 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
       const processing = itemsRef.current.filter((item) => item.status === 'processing' && item.uuid)
 
       for (const item of processing) {
-        if (Date.now() - item.startedAt > PROCESSING_TIMEOUT_MS) {
+        if (Date.now() - (item.processingSince ?? Date.now()) > PROCESSING_TIMEOUT_MS) {
           updateItem(item.id, { status: 'failed', error: 'Obrada je trajala predugo.' })
 
           continue
@@ -134,7 +144,10 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
         try {
           const status = await fetchPhotoStatus(item.uuid as string)
 
-          if (status === 'failed') {
+          if (status === null) {
+            // The upload was accepted, so a missing photo means the admin deleted it.
+            updateItem(item.id, { status: 'failed', error: 'Fotografija je uklonjena.' })
+          } else if (status === 'failed') {
             updateItem(item.id, { status: 'failed', error: 'Obrada fotografije nije uspjela. Pokušajte ponovo.' })
           } else if (status === 'processed') {
             const photo = await fetchPhoto(item.uuid as string)

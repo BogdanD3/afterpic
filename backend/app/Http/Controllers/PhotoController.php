@@ -9,6 +9,7 @@ use App\Models\Photo;
 use Carbon\Carbon;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -36,9 +37,19 @@ class PhotoController extends Controller
 
     /**
      * Store an uploaded photo and queue it for processing.
+     *
+     * The phone sends the same `upload_id` with every retry of one photo.
+     * When the first attempt was stored but its response got lost, the retry
+     * gets that photo back instead of a duplicate.
      */
     public function store(StorePhotoRequest $request): JsonResponse
     {
+        $uploadId = $request->validated('upload_id');
+
+        if ($uploadId !== null && ($existing = Photo::where('upload_id', $uploadId)->first())) {
+            return $this->acceptedResponse($existing);
+        }
+
         $uuid = (string) Str::uuid();
         $file = $request->file('photo');
 
@@ -61,15 +72,28 @@ class PhotoController extends Controller
             ], 503);
         }
 
-        $photo = Photo::create([
-            'uuid' => $uuid,
-            'status' => Photo::STATUS_PENDING,
-            'original_path' => $originalPath,
-            'mime_type' => $file->getMimeType(),
-        ]);
+        try {
+            $photo = Photo::create([
+                'uuid' => $uuid,
+                'upload_id' => $uploadId,
+                'status' => Photo::STATUS_PENDING,
+                'original_path' => $originalPath,
+                'mime_type' => $file->getMimeType(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Two attempts of the same photo arrived at the same time; the other one won.
+            Storage::disk('local')->deleteDirectory("photos/{$uuid}");
+
+            return $this->acceptedResponse(Photo::where('upload_id', $uploadId)->firstOrFail());
+        }
 
         ProcessPhotoJob::dispatch($photo);
 
+        return $this->acceptedResponse($photo);
+    }
+
+    private function acceptedResponse(Photo $photo): JsonResponse
+    {
         return response()->json([
             'uuid' => $photo->uuid,
             'status' => $photo->status,

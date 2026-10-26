@@ -159,6 +159,19 @@ class PhotoDeleteTest extends TestCase
         $this->assertDatabaseHas('photos', ['uuid' => $photo->uuid]);
     }
 
+    public function test_deletes_with_the_right_token_do_not_count_against_the_limit(): void
+    {
+        config(['photos.admin_rate_limit' => 2]);
+
+        foreach (range(1, 4) as $attempt) {
+            $photo = $this->storedPhoto();
+
+            $this->deleteJson("/api/photos/{$photo->uuid}", [], $this->adminHeaders())->assertNoContent();
+        }
+
+        $this->assertDatabaseCount('photos', 0);
+    }
+
     /**
      * @return array<string, string>
      */
