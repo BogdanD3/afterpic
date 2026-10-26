@@ -6,6 +6,7 @@ use Database\Factories\PhotoFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -28,6 +29,7 @@ class Photo extends Model
     protected $fillable = [
         'uuid',
         'upload_id',
+        'room_id',
         'status',
         'original_path',
         'web_path',
@@ -39,6 +41,14 @@ class Photo extends Model
     ];
 
     /**
+     * @return BelongsTo<Room, $this>
+     */
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class);
+    }
+
+    /**
      * Only photos that are ready to be shown publicly.
      *
      * @param  Builder<Photo>  $query
@@ -47,6 +57,17 @@ class Photo extends Model
     public function scopeProcessed(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_PROCESSED);
+    }
+
+    /**
+     * Processed photos in rooms that can still be opened.
+     *
+     * @param  Builder<Photo>  $query
+     * @return Builder<Photo>
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        return $query->processed()->whereHas('room', fn (Builder $room) => $room->active());
     }
 
     /**
@@ -82,7 +103,11 @@ class Photo extends Model
                 Storage::disk('local')->deleteDirectory($directory);
                 Storage::disk('public')->deleteDirectory($directory);
 
-                DB::table('photo_deletions')->insert(['uuid' => $this->uuid, 'deleted_at' => now()]);
+                DB::table('photo_deletions')->insert([
+                    'uuid' => $this->uuid,
+                    'room_id' => $this->room_id,
+                    'deleted_at' => now(),
+                ]);
                 $this->delete();
             });
         } catch (Throwable $exception) {

@@ -6,9 +6,10 @@ use App\Models\Photo;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 #[Signature('app:prune-old-photos {--dry-run : Only list the photos that would be deleted}')]
-#[Description('Delete photos older than the retention period (database row and files)')]
+#[Description('Delete photos older than the retention period in events that never expire (row and files)')]
 class PruneOldPhotos extends Command
 {
     /**
@@ -35,7 +36,9 @@ class PruneOldPhotos extends Command
         $deleted = 0;
         $failed = 0;
 
+        // Events with an expiry date are deleted as a whole by app:prune-expired-events.
         Photo::query()
+            ->whereHas('room.event', fn (Builder $event) => $event->whereNull('expires_at'))
             ->where('created_at', '<', $cutoff)
             ->chunkById(100, function ($photos) use ($dryRun, &$deleted, &$failed): void {
                 foreach ($photos as $photo) {

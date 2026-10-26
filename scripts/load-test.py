@@ -8,11 +8,13 @@ its photos one after another with an upload id, and the test then waits until
 the server has processed every photo. Meanwhile the viewers poll the gallery
 every 5 seconds like open pages do.
 
-Usage:
-  python3 scripts/load-test.py https://your-server --photo ~/Pictures/phone.jpg
-  python3 scripts/load-test.py https://your-server --photo phone.jpg --phones 100 --photos-per-phone 2 --viewers 200
-  python3 scripts/load-test.py https://your-server --photo phone.jpg --admin-token TOKEN   # deletes its photos afterwards
+Usage (ROOM is the code at the end of a room link, /r/ROOM; make a test
+event in /admin for it and delete it afterwards):
+  python3 scripts/load-test.py https://your-server --room ROOM --photo ~/Pictures/phone.jpg
+  python3 scripts/load-test.py https://your-server --room ROOM --photo phone.jpg --phones 100 --photos-per-phone 2 --viewers 200
+  python3 scripts/load-test.py https://your-server --room ROOM --photo phone.jpg --admin-token TOKEN   # deletes its photos afterwards
 
+  --room CODE         The room to upload into (required).
   --photo FILE        A real phone photo, ideally a JPEG of about 4000 px (what
                       phones send after preparing). Without it a generated
                       1600x1200 PNG is used, which is lighter to process.
@@ -107,7 +109,7 @@ def phone(args, context, photo, name, mime, start):
             headers["Cookie"] = cookie
 
         began = time.monotonic()
-        status, response_headers, response_body = request(context, "POST", f"{args.url}/api/photos", body, headers)
+        status, response_headers, response_body = request(context, "POST", f"{args.url}/api/rooms/{args.room}/photos", body, headers)
         took = time.monotonic() - began
 
         # The cookie is kept by hand: it is marked Secure, and a test against
@@ -128,7 +130,7 @@ def phone(args, context, photo, name, mime, start):
 
 def viewer(args, context):
     time.sleep(random.uniform(0, POLL_INTERVAL_S))
-    status, _, body = request(context, "GET", f"{args.url}/api/photos", headers={"Accept": "application/json"}, timeout=30)
+    status, _, body = request(context, "GET", f"{args.url}/api/rooms/{args.room}/photos", headers={"Accept": "application/json"}, timeout=30)
     if status != 200:
         with lock:
             results["poll_errors"][f"gallery HTTP {status}"] = results["poll_errors"].get(f"gallery HTTP {status}", 0) + 1
@@ -138,7 +140,7 @@ def viewer(args, context):
 
     while not stop_viewers.wait(POLL_INTERVAL_S):
         began = time.monotonic()
-        url = f"{args.url}/api/photos/updates?cursor={urllib.parse.quote(cursor, safe='')}"
+        url = f"{args.url}/api/rooms/{args.room}/photos/updates?cursor={urllib.parse.quote(cursor, safe='')}"
         status, _, body = request(context, "GET", url, headers={"Accept": "application/json"}, timeout=30)
         took = time.monotonic() - began
 
@@ -178,6 +180,7 @@ def percentile(values, share):
 def main():
     parser = argparse.ArgumentParser(description="Load test for the photo gallery.", add_help=False)
     parser.add_argument("url", nargs="?")
+    parser.add_argument("--room")
     parser.add_argument("--photo")
     parser.add_argument("--phones", type=int, default=50)
     parser.add_argument("--photos-per-phone", type=int, default=3)
@@ -187,7 +190,7 @@ def main():
     parser.add_argument("-h", "--help", action="store_true")
     args = parser.parse_args()
 
-    if args.help or not args.url:
+    if args.help or not args.url or not args.room:
         print(__doc__)
         return 0 if args.help else 2
 

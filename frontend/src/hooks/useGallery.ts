@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, fetchGalleryPage, fetchUpdates } from '../api/photos'
+import { ApiError, fetchGalleryPage, fetchUpdates, roomPhotosPath } from '../api/photos'
 import type { Photo } from '../types'
 
 export const POLL_INTERVAL_MS = 5000
@@ -17,7 +17,11 @@ function appendOldest(current: Photo[], incoming: Photo[]): Photo[] {
   return [...current, ...incoming.filter((photo) => !known.has(photo.uuid))]
 }
 
-export function useGallery() {
+/**
+ * The photos of one room, kept up to date by polling. `onRoomGone` is called
+ * when the server says the room no longer exists (deleted or expired).
+ */
+export function useGallery(code: string, onRoomGone: () => void) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [nextPath, setNextPath] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -26,11 +30,16 @@ export function useGallery() {
   // (late finishers overlap), so incoming photos are deduplicated by uuid.
   const cursorRef = useRef<string | null>(null)
   const isLoadingMoreRef = useRef(false)
+  const onRoomGoneRef = useRef(onRoomGone)
+
+  useEffect(() => {
+    onRoomGoneRef.current = onRoomGone
+  })
 
   useEffect(() => {
     let cancelled = false
 
-    fetchGalleryPage()
+    fetchGalleryPage(roomPhotosPath(code))
       .then((page) => {
         if (cancelled || !page) {
           return
@@ -41,8 +50,14 @@ export function useGallery() {
         setNextPath(page.links.next)
         setHasError(false)
       })
-      .catch(() => {
-        if (!cancelled) {
+      .catch((error) => {
+        if (cancelled) {
+          return
+        }
+
+        if (error instanceof ApiError && error.status === 404) {
+          onRoomGoneRef.current()
+        } else {
           setHasError(true)
         }
       })
@@ -55,7 +70,7 @@ export function useGallery() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [code])
 
   // Polling starts only after the first page is loaded, so cursorRef is set.
   useEffect(() => {
@@ -71,7 +86,7 @@ export function useGallery() {
       }
 
       try {
-        const updates = await fetchUpdates(cursor)
+        const updates = await fetchUpdates(code, cursor)
 
         if (!updates) {
           return
@@ -89,11 +104,17 @@ export function useGallery() {
           prependNewest(current, updates.data).filter((photo) => !deleted.has(photo.uuid)),
         )
       } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          onRoomGoneRef.current()
+
+          return
+        }
+
         // The server no longer accepts the cursor (e.g. a new APP_KEY after a
         // deploy): start over from the first page. Otherwise keep the current
         // gallery; the next tick tries again.
         if (error instanceof ApiError && error.status === 422) {
-          const page = await fetchGalleryPage().catch(() => null)
+          const page = await fetchGalleryPage(roomPhotosPath(code)).catch(() => null)
 
           if (page) {
             cursorRef.current = page.updates_cursor
@@ -110,7 +131,7 @@ export function useGallery() {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', poll)
     }
-  }, [isLoading])
+  }, [code, isLoading])
 
   const loadMore = useCallback(async () => {
     if (!nextPath || isLoadingMoreRef.current) {

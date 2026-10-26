@@ -143,7 +143,7 @@ class PhotoUploadLimitsTest extends TestCase
     {
         $this->unencryptedCookies = $device === null ? [] : [LimitPhotoUploads::COOKIE => $device];
 
-        return $this->withCredentials()->postJson('/api/photos', [
+        return $this->withCredentials()->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
         ]);
     }

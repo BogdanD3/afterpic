@@ -27,7 +27,7 @@ class PhotoFailureTest extends TestCase
         $disk->shouldReceive('putFileAs')->andThrow(new RuntimeException('No space left on device'));
         Storage::shouldReceive('disk')->with('local')->andReturn($disk);
 
-        $this->postJson('/api/photos', [
+        $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 400, 300),
         ])
             ->assertStatus(503)
@@ -42,7 +42,7 @@ class PhotoFailureTest extends TestCase
         $disk->shouldReceive('putFileAs')->andReturn(false);
         Storage::shouldReceive('disk')->with('local')->andReturn($disk);
 
-        $this->postJson('/api/photos', [
+        $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 400, 300),
         ])->assertStatus(503);
 
@@ -70,13 +70,13 @@ class PhotoFailureTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->postJson('/api/photos', [
+        $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf'),
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('photo');
 
-        $this->postJson('/api/photos', [])
+        $this->postJson($this->photosUrl(), [])
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('photo');
     }

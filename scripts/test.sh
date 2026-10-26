@@ -2,7 +2,7 @@
 # One command to test the whole app.
 #
 #   bash scripts/test.sh                              # backend tests + frontend lint/build
-#   bash scripts/test.sh https://your-url [--insecure]  # ... plus live end-to-end check of a running server
+#   bash scripts/test.sh https://your-url --room CODE [--insecure]  # ... plus live end-to-end check of a running server
 #
 # Steps are skipped (and reported as SKIPPED) when their tools are missing.
 # Exit code is non-zero if any step that ran has failed.

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Photo;
+use App\Models\Room;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -22,6 +23,8 @@ class PhotoFactory extends Factory
 
         return [
             'uuid' => $uuid,
+            // Tests mostly work in one room: reuse the first one (see Tests\TestCase::room()).
+            'room_id' => fn (): int => Room::query()->oldest('id')->value('id') ?? Room::factory()->create()->id,
             'status' => Photo::STATUS_PROCESSED,
             'original_path' => "photos/{$uuid}/original",
             'web_path' => "photos/{$uuid}/web.webp",

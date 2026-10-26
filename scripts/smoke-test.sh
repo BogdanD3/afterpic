@@ -7,28 +7,31 @@
 # the processed images and the live-update endpoint show it, and downloads the
 # download back: either the untouched original or the JPEG download copy.
 #
-# Usage:
-#   bash scripts/smoke-test.sh https://server.tailaa4397.ts.net:14443
-#   bash scripts/smoke-test.sh http://127.0.0.1:7000
-#   bash scripts/smoke-test.sh https://host:port --insecure     # skip certificate check
-#   bash scripts/smoke-test.sh https://host:port --timeout 120  # wait longer for processing
+# Usage (ROOM is the code at the end of a room link, /r/ROOM; make a test
+# event in /admin for it):
+#   bash scripts/smoke-test.sh https://server.tailaa4397.ts.net:14443 --room test-k7m2q9xw4p
+#   bash scripts/smoke-test.sh http://127.0.0.1:7000 --room test-k7m2q9xw4p
+#   bash scripts/smoke-test.sh https://host:port --room CODE --insecure     # skip certificate check
+#   bash scripts/smoke-test.sh https://host:port --room CODE --timeout 120  # wait longer for processing
 #
 # Needs: bash, curl, python3, cmp.
 #
 # Side effect: each run leaves ONE small test photo (a blue/yellow chess pattern)
-# in the gallery and uses one of the hourly uploads of this computer's IP.
-# There is no delete feature yet.
+# in the room and uses one of the hourly uploads of this computer's IP. Use a
+# test event and delete it in /admin afterwards.
 
 set -u
 
 BASE=""
 INSECURE=0
 PROCESS_TIMEOUT=60
+ROOM=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --insecure) INSECURE=1 ;;
         --timeout) shift; PROCESS_TIMEOUT="${1:-60}" ;;
+        --room) shift; ROOM="${1:-}" ;;
         -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
         -*) echo "Unknown option: $1" >&2; exit 2 ;;
         *) BASE="$1" ;;
@@ -36,12 +39,13 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-if [ -z "$BASE" ]; then
-    echo "Usage: bash scripts/smoke-test.sh <base-url> [--insecure] [--timeout seconds]" >&2
+if [ -z "$BASE" ] || [ -z "$ROOM" ]; then
+    echo "Usage: bash scripts/smoke-test.sh <base-url> --room <room-code> [--insecure] [--timeout seconds]" >&2
     exit 2
 fi
 
 BASE="${BASE%/}"
+PHOTOS="$BASE/api/rooms/$ROOM/photos"
 
 for tool in curl python3 cmp; do
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -164,18 +168,18 @@ fi
 
 step "2. Gallery API"
 
-request list "$BASE/api/photos" -H 'Accept: application/json'
+request list "$PHOTOS" -H 'Accept: application/json'
 CURSOR_BEFORE=""
 if [ "$STATUS" = "200" ] && jget "$WORK/list.body" data >/dev/null && CURSOR_BEFORE="$(jget "$WORK/list.body" updates_cursor)"; then
-    ok "GET /api/photos returns a data list and updates_cursor"
+    ok "GET the room's photos returns a data list and updates_cursor"
 else
-    bad "GET /api/photos returns a data list and updates_cursor" "got HTTP $STATUS"
+    bad "GET the room's photos returns a data list and updates_cursor" "got HTTP $STATUS"
 fi
 
 NEXT_LINK="$(jget "$WORK/list.body" links.next || true)"
 case "$NEXT_LINK" in
     None|"") ok "pagination link is a path (only one page, nothing to check)" ;;
-    /api/photos\?cursor=*) ok "pagination link is a path without host" ;;
+    /api/rooms/*/photos\?cursor=*) ok "pagination link is a path without host" ;;
     *) bad "pagination link is a path without host" "got $NEXT_LINK" ;;
 esac
 
@@ -185,18 +189,18 @@ else
     bad "security headers are present" "X-Content-Type-Options: nosniff is missing"
 fi
 
-request updates_bad "$BASE/api/photos/updates" -H 'Accept: application/json'
+request updates_bad "$PHOTOS/updates" -H 'Accept: application/json'
 if [ "$STATUS" = "422" ]; then
-    ok "GET /api/photos/updates without a cursor is rejected (422)"
+    ok "GET updates without a cursor is rejected (422)"
 else
-    bad "GET /api/photos/updates without a cursor is rejected (422)" "got HTTP $STATUS"
+    bad "GET updates without a cursor is rejected (422)" "got HTTP $STATUS"
 fi
 
-request updates_forged "$BASE/api/photos/updates?cursor=eyJhZnRlcl9pZCI6MH0" -H 'Accept: application/json'
+request updates_forged "$PHOTOS/updates?cursor=eyJhZnRlcl9pZCI6MH0" -H 'Accept: application/json'
 if [ "$STATUS" = "422" ]; then
-    ok "GET /api/photos/updates with a forged cursor is rejected (422)"
+    ok "GET updates with a forged cursor is rejected (422)"
 else
-    bad "GET /api/photos/updates with a forged cursor is rejected (422)" "got HTTP $STATUS"
+    bad "GET updates with a forged cursor is rejected (422)" "got HTTP $STATUS"
 fi
 
 request unknown "$BASE/api/photos/00000000-0000-4000-8000-000000000000" -H 'Accept: application/json'
@@ -210,14 +214,14 @@ fi
 
 step "3. Upload validation"
 
-request fake -X POST -H 'Accept: application/json' -F "photo=@$WORK/fake.jpg;type=image/jpeg" "$BASE/api/photos"
+request fake -X POST -H 'Accept: application/json' -F "photo=@$WORK/fake.jpg;type=image/jpeg" "$PHOTOS"
 if [ "$STATUS" = "422" ]; then
     ok "a text file pretending to be a JPEG is rejected (422)"
 else
     bad "a text file pretending to be a JPEG is rejected (422)" "got HTTP $STATUS"
 fi
 
-request nofile -X POST -H 'Accept: application/json' "$BASE/api/photos"
+request nofile -X POST -H 'Accept: application/json' "$PHOTOS"
 if [ "$STATUS" = "422" ]; then
     ok "an upload without a file is rejected (422)"
 else
@@ -228,7 +232,7 @@ fi
 
 step "4. Upload and processing"
 
-request upload -X POST -H 'Accept: application/json' -F "photo=@$WORK/photo.png;type=image/png" "$BASE/api/photos"
+request upload -X POST -H 'Accept: application/json' -F "photo=@$WORK/photo.png;type=image/png" "$PHOTOS"
 UUID=""
 if [ "$STATUS" = "202" ] && UUID="$(jget "$WORK/upload.body" uuid)" && [ -n "$UUID" ]; then
     ok "upload accepted with HTTP 202 (uuid $UUID)"
@@ -307,14 +311,14 @@ else
 
         step "5. Gallery and live updates"
 
-        request list2 "$BASE/api/photos" -H 'Accept: application/json'
+        request list2 "$PHOTOS" -H 'Accept: application/json'
         if list_has "$WORK/list2.body" data uuid "$UUID"; then
             ok "the photo shows up in the gallery list"
         else
             bad "the photo shows up in the gallery list"
         fi
 
-        request updates "$BASE/api/photos/updates" --get --data-urlencode "cursor=$CURSOR_BEFORE" -H 'Accept: application/json'
+        request updates "$PHOTOS/updates" --get --data-urlencode "cursor=$CURSOR_BEFORE" -H 'Accept: application/json'
         if [ "$STATUS" = "200" ] && list_has "$WORK/updates.body" data uuid "$UUID"; then
             ok "the photo shows up in the live-update feed"
         else
@@ -323,7 +327,7 @@ else
 
         ETAG="$(header updates etag)"
         if [ -n "$ETAG" ]; then
-            request updates304 "$BASE/api/photos/updates" --get --data-urlencode "cursor=$CURSOR_BEFORE" -H 'Accept: application/json' -H "If-None-Match: $ETAG"
+            request updates304 "$PHOTOS/updates" --get --data-urlencode "cursor=$CURSOR_BEFORE" -H 'Accept: application/json' -H "If-None-Match: $ETAG"
             if [ "$STATUS" = "304" ]; then
                 ok "unchanged live-update feed answers 304 (saves bandwidth)"
             else

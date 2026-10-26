@@ -22,7 +22,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_valid_photo_is_accepted_and_processed(): void
     {
-        $response = $this->postJson('/api/photos', [
+        $response = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 800, 600),
         ]);
 
@@ -39,7 +39,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_upload_is_stored_under_a_generated_path_not_the_client_filename(): void
     {
-        $this->postJson('/api/photos', [
+        $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('../../evil.jpg', 100, 100),
         ])->assertAccepted();
 
@@ -51,7 +51,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_photo_larger_than_fifty_megabytes_is_rejected(): void
     {
-        $response = $this->postJson('/api/photos', [
+        $response = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->create('big.jpg', 51201, 'image/jpeg'),
         ]);
 
@@ -61,7 +61,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_heic_photo_is_rejected_with_a_clear_message(): void
     {
-        $response = $this->postJson('/api/photos', [
+        $response = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->create('photo.heic', 10, 'image/heic'),
         ]);
 
@@ -72,7 +72,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_non_image_file_with_image_extension_is_rejected(): void
     {
-        $response = $this->postJson('/api/photos', [
+        $response = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->create('fake.jpg', 10, 'image/jpeg'),
         ]);
 
@@ -84,7 +84,7 @@ class PhotoUploadTest extends TestCase
     {
         config(['photos.max_pixels' => 100]);
 
-        $response = $this->postJson('/api/photos', [
+        $response = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('wide.jpg', 20, 20),
         ]);
 
@@ -96,12 +96,12 @@ class PhotoUploadTest extends TestCase
     {
         $uploadId = fake()->uuid();
 
-        $first = $this->postJson('/api/photos', [
+        $first = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
             'upload_id' => $uploadId,
         ])->assertAccepted();
 
-        $retry = $this->postJson('/api/photos', [
+        $retry = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
             'upload_id' => $uploadId,
         ])->assertAccepted();
@@ -113,7 +113,7 @@ class PhotoUploadTest extends TestCase
     public function test_different_upload_ids_are_different_photos(): void
     {
         foreach ([fake()->uuid(), fake()->uuid()] as $uploadId) {
-            $this->postJson('/api/photos', [
+            $this->postJson($this->photosUrl(), [
                 'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
                 'upload_id' => $uploadId,
             ])->assertAccepted();
@@ -124,7 +124,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_malformed_upload_id_is_rejected(): void
     {
-        $this->postJson('/api/photos', [
+        $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 50, 50),
             'upload_id' => 'not-a-uuid',
         ])->assertUnprocessable()->assertJsonValidationErrorFor('upload_id');
@@ -132,7 +132,7 @@ class PhotoUploadTest extends TestCase
 
     public function test_missing_photo_field_is_rejected(): void
     {
-        $this->postJson('/api/photos')
+        $this->postJson($this->photosUrl())
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('photo');
     }
