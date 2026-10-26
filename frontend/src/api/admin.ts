@@ -88,3 +88,41 @@ export async function deleteDevicePhotos(
 export async function setDeviceBlocked(token: string, deviceId: string, blocked: boolean): Promise<AdminDevice> {
   return (await adminRequest<{ data: AdminDevice }>(token, blocked ? 'POST' : 'DELETE', `/devices/${deviceId}/block`)).data
 }
+
+export interface AdminStats {
+  events_active: number
+  events_expired: number
+  photos: number
+  photos_today: number
+  devices: number
+  open_requests: number
+  disk: { total_bytes: number; free_bytes: number; used_percent: number | null }
+}
+
+export async function fetchStats(token: string): Promise<AdminStats> {
+  return adminRequest<AdminStats>(token, 'GET', '/stats')
+}
+
+export interface AdminRequest {
+  id: number
+  type: 'remove_photo' | 'delete_room'
+  status: 'open' | 'approved' | 'rejected'
+  reason: string
+  room_name: string
+  event_name: string
+  // Null once the room is gone.
+  room_code: string | null
+  is_main_room: boolean
+  photo: { uuid: string; thumb_url: string } | null
+  from: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export async function listRequests(token: string, onlyOpen: boolean): Promise<{ data: AdminRequest[]; open_count: number }> {
+  return adminRequest(token, 'GET', `/requests?status=${onlyOpen ? 'open' : 'all'}`)
+}
+
+export async function resolveRequest(token: string, id: number, decision: 'approve' | 'reject'): Promise<void> {
+  await adminRequest(token, 'POST', `/requests/${id}/${decision}`)
+}

@@ -361,3 +361,17 @@ export function uploadPhoto(
     request.send(form)
   })
 }
+
+/** Any guest asks the organiser to remove a photo, with a reason. */
+export async function requestPhotoRemoval(uuid: string, reason: string): Promise<void> {
+  const response = await fetch(resolveUrl(`/api/photos/${uuid}/removal-request`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+
+  if (!response.ok) {
+    throw new ApiError(response.status, response.status === 429 ? 'Previše zahtjeva. Pokušajte kasnije.' : 'Zahtjev nije poslan.')
+  }
+}

@@ -1,12 +1,14 @@
 import { useCallback, useState } from 'react'
 import { wasAskedForName } from '../api/me'
-import { deletePhoto } from '../api/photos'
+import { deletePhoto, requestPhotoRemoval } from '../api/photos'
 import { CameraButton } from '../components/CameraButton'
 import { InviteDialog } from '../components/InviteDialog'
 import { Lightbox } from '../components/Lightbox'
+import { ManageDialog } from '../components/ManageDialog'
 import { NameDialog } from '../components/NameDialog'
 import { NewRoomDialog } from '../components/NewRoomDialog'
 import { PhotoGrid } from '../components/PhotoGrid'
+import { ReasonDialog } from '../components/ReasonDialog'
 import { RoomSwitcher } from '../components/RoomSwitcher'
 import { useAdminToken, useRoomKey } from '../hooks/useAdminToken'
 import { useGallery } from '../hooks/useGallery'
@@ -22,7 +24,7 @@ const ROLE_LABELS: Record<Exclude<RoomRole, null>, string> = {
   room: 'Admin sobe',
 }
 
-type OpenDialog = 'invite' | 'new-room' | 'rooms' | 'name' | null
+type OpenDialog = 'invite' | 'new-room' | 'rooms' | 'name' | 'manage' | null
 
 export function RoomPage({ code }: { code: string }) {
   const [adminToken] = useAdminToken()
@@ -70,6 +72,7 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
   const { photos, removePhoto } = gallery
   const uploads = useUploads(room.code, gallery.addPhoto)
   const [dialog, setDialog] = useState<OpenDialog>(null)
+  const [removalUuid, setRemovalUuid] = useState<string | null>(null)
   const closeDialog = useCallback(() => setDialog(null), [])
   const { event } = room
 
@@ -119,7 +122,11 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
           {!room.is_main && <p>{event.name}</p>}
         </div>
         <div className="room-actions">
-          {role && <span className="role-badge">{ROLE_LABELS[role]}</span>}
+          {role && (
+            <button type="button" className="role-badge" onClick={() => setDialog('manage')}>
+              {ROLE_LABELS[role]} · Upravljanje
+            </button>
+          )}
           <button type="button" className="chip" onClick={() => setDialog('invite')}>
             Pozovi
           </button>
@@ -159,7 +166,8 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
         />
 
         <p className="privacy-note">
-          Fotografije u ovoj galeriji vidi svako ko ima link. Za uklanjanje fotografije javite se organizatoru.
+          Fotografije u ovoj galeriji vidi svako ko ima link. Želite da se neka fotografija ukloni? Otvorite je i dodirnite
+          „Ukloni?”.
         </p>
       </main>
 
@@ -172,6 +180,7 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
           onClose={closeLightbox}
           onNavigate={openPhotoAt}
           onDelete={role ? handleDelete : undefined}
+          onRequestRemoval={setRemovalUuid}
           moderation={role === 'super' && adminToken ? { adminToken, roomCode: room.code } : undefined}
         />
       )}
@@ -179,6 +188,17 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
       {dialog === 'invite' && <InviteDialog room={room} onClose={closeDialog} />}
       {dialog === 'rooms' && <RoomSwitcher current={room} onClose={closeDialog} onChangeName={() => setDialog('name')} />}
       {dialog === 'name' && <NameDialog onClose={closeDialog} />}
+      {dialog === 'manage' && role && (
+        <ManageDialog room={room} role={role} keys={{ adminToken, roomKey }} onClose={closeDialog} />
+      )}
+      {removalUuid && (
+        <ReasonDialog
+          title="Zatraži uklanjanje fotografije"
+          text="Organizator će pogledati zahtjev i ukloniti fotografiju. Napišite zašto (npr. „Na slici sam ja”)."
+          onSend={(reason) => requestPhotoRemoval(removalUuid, reason)}
+          onClose={() => setRemovalUuid(null)}
+        />
+      )}
       {dialog === 'new-room' && event.main_room_code && (
         <NewRoomDialog eventRoomCode={event.main_room_code} onClose={closeDialog} />
       )}

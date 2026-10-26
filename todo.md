@@ -24,6 +24,9 @@ Effort guide: **S** = under half a day, **M** = a day or two, **L** = several da
 | **Load test script** | `python3 scripts/load-test.py <url> --photo <file>`: many phones upload at once while guests poll, then it reports upload times, queue time and errors. Not run against the server yet, see item 1 |
 | **Events and rooms** | You sell events: only the super admin creates them on `/admin`. Each event has a main room with its own unguessable link (`/r/{name}-{random}`) and printable table QR cards. Guest rooms per event can be switched on or off; one phone can create 5 per day. Host link (all rooms of the event) and guest room admin links can delete photos. Events expire after `PHOTOS_EVENT_DAYS` (or per event, or never): uploads close, the gallery stays 3 more days (`PHOTOS_EVENT_GRACE_DAYS`), then everything is deleted at night. Rooms and events are deleted in the background. Old photos moved into a first event, "Glavna galerija". `/` is a static landing page |
 | **Who uploaded what** | Every photo stores the phone that sent it. Guests are asked once for an optional name, shown under their photos. `/admin` lists the phones per event: delete all their photos, block them. The full-screen photo shows super admins which phone sent it, with "delete all and block" |
+| **Admin page and requests** | `/admin` has three tabs: Događaji (search, Aktivni / Istekli / Svi, each event with links, QR, table cards, switches, expiry, rooms, phones), Zahtjevi (inbox with a count badge: approve or reject) and Pregled (events, photos, phones, open requests, disk). Guests ask for a photo to be removed ("Ukloni?" in the full-screen photo); hosts and room admins ask for their room or event to be deleted. Approving does the deletion |
+| **Preuzmi sve** | Host, room admin and super admin download every photo of a room as one ZIP from "Upravljanje", through a 10-minute signed link |
+| **Privacy notice** | Every room says under the photos that everyone with the link sees them, and how to ask for a removal |
 | **GPS privacy** | None of the three stored copies contain GPS or camera data |
 | **Live gallery bug** | Polling also asks for everything that finished since the last poll, so a photo that finishes late is no longer missed |
 | **Disk write failures** | Storage disks raise errors. A failed save answers 503 and creates no photo. A failed processing marks the photo `failed` |
@@ -66,11 +69,7 @@ Still to check:
 - Admin delete: does the photo disappear on a second phone within a few seconds?
 - Upload speed on mobile data, and opening the page from a phone that is not on Tailscale.
 
-### 3. Privacy notice (S)
-
-One short line for guests: photos are visible to everyone with the link, and who to contact to have one removed (the admin can delete it).
-
-### 4. Check the quality of the download copy (S)
+### 3. Check the quality of the download copy (S)
 
 Compare a real phone photo with its download copy zoomed in. Decide the final `PHOTOS_DOWNLOAD_MAX_EDGE` and `PHOTOS_DOWNLOAD_QUALITY`. A typical 12 MP photo (4032x3024) becomes 3000x2250, about 55% of the pixels. `PHOTOS_DOWNLOAD_MAX_EDGE=4000` keeps the full 12 MP (the phone already sends up to 4000 px).
 
@@ -78,30 +77,30 @@ Compare a real phone photo with its download copy zoomed in. Decide the final `P
 
 ## P1: important for running this as a business
 
-### 5. Events and rooms: still to do (S)
+### 4. Events and rooms: still to do (S)
 
 Events, rooms, host and guest room admins, expiry and the admin page are built (see Done and the README). Left:
 - Run the new tests and the smoke test on the server (`bash scripts/test.sh <url> --room <code>`; make a test event in `/admin` first).
 - Fill in the contact link on the landing page (`CONTACT` in `frontend/src/pages/Landing.tsx`).
+- Try the whole workflow once on real phones: create an event, print a table card, scan it, upload, make a guest room, ask for a removal, approve it in "Zahtjevi", download the ZIP with the host link.
 
-### 6. Hide or approve photos (M)
+### 5. Hide or approve photos (M)
 
 The admin can delete, but not hide a photo or approve photos before they are shown. Useful at events where the host wants control.
 
-### 7. Download everything as a ZIP, and select several (M)
+### 6. Select several photos and download them (M)
 
-- ZIP of all photos for the host. Stream it (for example with ZipStream), never build it in memory.
-- Select several photos in the grid and download them.
+The host's "Preuzmi sve" ZIP exists. Still open: select several photos in the grid and download only those. Very large rooms: the ZIP is built on disk before it is sent (about as large as the photos), so watch free disk space; streaming it (for example with ZipStream) would avoid that.
 
-### 8. Live wall / slideshow page for a TV (M)
+### 7. Live wall / slideshow page for a TV (M)
 
 A full-screen page with automatic transitions and the event QR code in a corner. Uses the existing polling endpoint.
 
-### 9. Monitoring and alerts (S to M)
+### 8. Monitoring and alerts (S to M)
 
 Alert on failed jobs or `failed` photos, an uptime check on `/up`, memory alerts, and Docker log rotation. The disk check already writes a warning to the log every hour; it still needs to reach you (e-mail or a push message).
 
-### 10. Real-time updates instead of polling (M to L)
+### 9. Real-time updates instead of polling (M to L)
 
 Polling every 5 seconds works. Laravel Reverb or Server-Sent Events would make photos appear instantly. Optional.
 
@@ -109,7 +108,7 @@ Polling every 5 seconds works. Laravel Reverb or Server-Sent Events would make p
 
 ## P2: quality and polish
 
-### 11. Automated checks (M)
+### 10. Automated checks (M)
 
 - Run the tests in CI (GitHub Actions) and build the Docker image there.
 - A test with the real queue driver and two workers (the tests use `QUEUE_CONNECTION=sync`).
@@ -117,22 +116,22 @@ Polling every 5 seconds works. Laravel Reverb or Server-Sent Events would make p
 - `scripts/test.sh` downloads about 116 packages on every run. Keep a composer cache in a Docker volume.
 - `scripts/smoke-test.sh` leaves one test photo in the gallery on every run. Make it delete its photo with the admin delete when `PHOTOS_ADMIN_TOKEN` is given.
 
-### 12. Housekeeping (S)
+### 11. Housekeeping (S)
 
 - `backend/composer.lock` is out of date after changing PHP to `^8.4` (`composer install` warns about it). Run `composer update --lock` in `backend/` and commit it.
 - Docker warns that the volumes `PhotoGallery-DB` and `PhotoGallery-Storage` belong to the project `coinis-hub---projekat-1` (the old folder name). Add `name: coinis-hub---projekat-1` at the top of `docker-compose.yml` so the warning goes away and the data stays.
 - Replace `backend/README.md` and `frontend/README.md` with short pointers to the root `README.md`.
 - Mark `backend/DEPLOY.md` as the bare-metal alternative, or remove it with `backend/deploy/` if it will not be used.
 
-### 13. Security hardening (S to M)
+### 12. Security hardening (S to M)
 
 `Content-Security-Policy` and `Strict-Transport-Security` headers, bot protection on uploads now that the gallery is public, a database user with minimal rights, pinned image versions (`mariadb:lts` and `php:8.4-fpm-bookworm` move over time).
 
-### 14. HEIC on Android (S)
+### 13. HEIC on Android (S)
 
 Safari converts HEIC on the phone. Chrome on Android usually cannot decode HEIC, so such a photo is still rejected. Rare (Android cameras save JPEG by default). If it matters: Imagick with libheif on the server.
 
-### 15. Frontend polish (S to M)
+### 14. Frontend polish (S to M)
 
 - Texts are hard-coded in Bosnian.
 - Allow picking several photos at once.
@@ -143,7 +142,6 @@ Safari converts HEIC on the phone. Chrome on Android usually cannot decode HEIC,
 
 ## Suggested order
 
-1. Server safety and load test (1), then phone test (2) and privacy notice (3). After that the app is ready for Friday.
-2. Download quality (4) before a bigger party.
-3. Decide the open questions for rooms (5), build them, then the live wall (8) and ZIP export (7).
-4. Monitoring (9) once real events run.
+1. Run the tests and the smoke test on the server, then the load test (1) and the events and rooms check (4).
+2. Phone test (2) and download quality (3) before the first paid event.
+3. Monitoring once real events run, then hide or approve photos, the live wall and selecting several photos.

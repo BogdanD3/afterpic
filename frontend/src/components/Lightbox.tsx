@@ -4,7 +4,13 @@ import '../lightbox-download.css'
 import { PhotoModeration } from './PhotoModeration'
 import type { Photo } from '../types'
 
-function DownloadButtons({ uuid, onDelete }: { uuid: string; onDelete?: (uuid: string) => Promise<void> }) {
+interface DownloadButtonsProps {
+  uuid: string
+  onDelete?: (uuid: string) => Promise<void>
+  onRequestRemoval?: (uuid: string) => void
+}
+
+function DownloadButtons({ uuid, onDelete, onRequestRemoval }: DownloadButtonsProps) {
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'error'>('idle')
   const [deleteState, setDeleteState] = useState<'idle' | 'busy' | 'error'>('idle')
 
@@ -61,6 +67,12 @@ function DownloadButtons({ uuid, onDelete }: { uuid: string; onDelete?: (uuid: s
         </button>
       )}
 
+      {!onDelete && onRequestRemoval && (
+        <button type="button" className="lightbox-download lightbox-delete" onClick={() => onRequestRemoval(uuid)}>
+          <span>Ukloni?</span>
+        </button>
+      )}
+
       {onDelete && (
         <button
           type="button"
@@ -83,13 +95,15 @@ interface LightboxProps {
   onClose: () => void
   onNavigate: (index: number) => void
   onDelete?: (uuid: string) => Promise<void>
+  // Guests without a key ask the organiser instead of deleting.
+  onRequestRemoval?: (uuid: string) => void
   // Super admin only: who sent the photo, remove everything from that phone.
   moderation?: { adminToken: string; roomCode: string }
 }
 
 const SWIPE_THRESHOLD_PX = 50
 
-export function Lightbox({ photos, index, onClose, onNavigate, onDelete, moderation }: LightboxProps) {
+export function Lightbox({ photos, index, onClose, onNavigate, onDelete, onRequestRemoval, moderation }: LightboxProps) {
   const touchStartX = useRef<number | null>(null)
   const photo = photos[index]
   const hasPrevious = index > 0
@@ -168,7 +182,7 @@ export function Lightbox({ photos, index, onClose, onNavigate, onDelete, moderat
         />
       )}
 
-      <DownloadButtons key={photo.uuid} uuid={photo.uuid} onDelete={onDelete} />
+      <DownloadButtons key={photo.uuid} uuid={photo.uuid} onDelete={onDelete} onRequestRemoval={onRequestRemoval} />
 
       {hasNext && (
         <button

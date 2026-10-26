@@ -16,6 +16,12 @@ A photo gallery for parties and events, sold per event. Guests scan the QR code 
 
 **Who uploaded what.** Every photo remembers the phone that sent it (the device id in the phone's signed cookie, see "Upload rules"). After the first photo a guest is asked once for a name (optional, can be skipped or changed later from "Sobe"); it shows under all their photos, also earlier ones. On `/admin` each event lists its phones with their photo counts: delete everything from one phone, or block it (a blocked phone cannot upload or create rooms). In a room opened as super admin, the full-screen photo shows which phone sent it, with one button to delete all its photos in the event and block it.
 
+**Admin page (`/admin`).** Three tabs. *Događaji*: create an event, search and filter (active, expired, all), and per event the guest link and QR code, the host link, printable table cards (four per A4 page), switches for uploads and guest rooms, a new expiry, the rooms (open, admin link, new link, delete), the phones, and deleting the event. *Zahtjevi*: the inbox. *Pregled*: events, photos, phones, open requests and free disk space.
+
+**Requests.** A guest opens a photo and taps "Ukloni?" to ask for it to be removed, with a reason. A host or guest room admin asks from "Upravljanje" for their room to be deleted (from the main room: the whole event). Requests land in *Zahtjevi*; approving does the deletion, rejecting keeps everything. Each phone can send 10 requests per hour.
+
+**Preuzmi sve.** In "Upravljanje", the host, a guest room's admin and the super admin download every photo of the room as one ZIP (the JPEG download copies), through a signed link that works for 10 minutes. The ZIP is built on disk first, so it needs about as much free space as the photos.
+
 Wrong keys count against `PHOTOS_ADMIN_RATE_LIMIT` per IP per minute. Deleting a room or an event hides it at once and removes the photos in the background. `/` is a static page that explains the product and calls no API.
 
 ## How it works
@@ -57,6 +63,14 @@ AGENTS.md   Project goals and guidelines
 | GET    | `/api/photos/{uuid}/status` | Processing status, for the uploader. |
 | GET    | `/api/photos/{uuid}/download` | The high quality copy. |
 | DELETE | `/api/photos/{uuid}` | Delete a photo (super admin, host or room admin key). |
+| POST   | `/api/photos/{uuid}/removal-request` | A guest asks for the photo to be removed (`reason`). |
+| POST   | `/api/rooms/{code}/deletion-request` | Host or room admin asks for the room (or event) to be deleted (`reason`). |
+| POST   | `/api/rooms/{code}/download-link` | Host, room admin or super admin: a 10-minute signed link to the ZIP. |
+| GET    | `/api/rooms/{code}/download-all` | The ZIP of every photo in the room (signed link only). |
+| GET/PUT | `/api/me`, `/api/me/name` | The phone's optional name under its photos. |
+| GET    | `/api/admin/stats` | Super admin: overview numbers and disk space. |
+| GET/POST | `/api/admin/requests`, `.../{id}/approve`, `.../{id}/reject` | Super admin: the request inbox. |
+| GET/POST/DELETE | `/api/admin/devices...` | Super admin: phones per event, delete all their photos, block. |
 | GET/POST/PATCH/DELETE | `/api/admin/events[/{id}]` | Super admin: list, create, change, delete events. |
 | DELETE | `/api/admin/rooms/{code}` | Super admin: delete a guest room. |
 | POST   | `/api/admin/rooms/{code}/rotate-code` | Super admin: a new link for a room; the old one stops working. |

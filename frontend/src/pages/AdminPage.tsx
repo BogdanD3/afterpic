@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { createEvent, deleteEvent, deleteRoom, listEvents, rotateRoomCode, updateEvent, type EventChanges } from '../api/admin'
+import {
+  createEvent,
+  deleteEvent,
+  deleteRoom,
+  fetchStats,
+  listEvents,
+  listRequests,
+  resolveRequest,
+  rotateRoomCode,
+  updateEvent,
+  type AdminRequest,
+  type AdminStats,
+  type EventChanges,
+} from '../api/admin'
 import { ApiError } from '../api/photos'
 import { CopyButton } from '../components/CopyButton'
 import { EventDevices } from '../components/EventDevices'
@@ -65,8 +78,23 @@ function AdminSignIn({ onSignIn }: { onSignIn: (token: string, remember: boolean
   )
 }
 
+type AdminTab = 'events' | 'requests' | 'overview'
+type EventFilter = 'active' | 'expired' | 'all'
+
+const FILTER_LABELS: Record<EventFilter, string> = { active: 'Aktivni', expired: 'Istekli', all: 'Svi' }
+
+function matchesFilter(event: AdminEvent, filter: EventFilter): boolean {
+  const expired = event.expires_at !== null && new Date(event.expires_at) <= new Date()
+
+  return filter === 'all' || (filter === 'expired' ? expired : !expired)
+}
+
 function AdminDashboard({ token, onSignOut }: { token: string; onSignOut: () => void }) {
+  const [tab, setTab] = useState<AdminTab>('events')
   const [events, setEvents] = useState<AdminEvent[] | null>(null)
+  const [openRequests, setOpenRequests] = useState(0)
+  const [filter, setFilter] = useState<EventFilter>('active')
+  const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [printing, setPrinting] = useState<{ name: string; url: string } | null>(null)
 
@@ -89,6 +117,19 @@ function AdminDashboard({ token, onSignOut }: { token: string; onSignOut: () => 
 
   useEffect(reload, [reload])
 
+  // The badge on "Zahtjevi": checked when the page opens and every minute.
+  useEffect(() => {
+    const check = () =>
+      fetchStats(token)
+        .then((stats) => setOpenRequests(stats.open_requests))
+        .catch(() => undefined)
+
+    check()
+    const timer = window.setInterval(check, 60_000)
+
+    return () => window.clearInterval(timer)
+  }, [token])
+
   useEffect(() => {
     if (!printing) {
       return
@@ -104,11 +145,24 @@ function AdminDashboard({ token, onSignOut }: { token: string; onSignOut: () => 
   const replace = (updated: AdminEvent) =>
     setEvents((current) => current?.map((event) => (event.id === updated.id ? updated : event)) ?? null)
 
+  const query = search.trim().toLowerCase()
+  const shown = events?.filter((event) => matchesFilter(event, filter) && event.name.toLowerCase().includes(query)) ?? null
+
   return (
     <>
       <main className="admin-page">
         <header className="admin-header">
-          <h1>Događaji</h1>
+          <nav className="admin-tabs" aria-label="Admin">
+            <button type="button" className={tab === 'events' ? 'is-active' : ''} onClick={() => setTab('events')}>
+              Događaji
+            </button>
+            <button type="button" className={tab === 'requests' ? 'is-active' : ''} onClick={() => setTab('requests')}>
+              Zahtjevi{openRequests > 0 && <span className="tab-badge">{openRequests}</span>}
+            </button>
+            <button type="button" className={tab === 'overview' ? 'is-active' : ''} onClick={() => setTab('overview')}>
+              Pregled
+            </button>
+          </nav>
           <button type="button" className="button button-secondary" onClick={onSignOut}>
             Odjava
           </button>
@@ -120,31 +174,199 @@ function AdminDashboard({ token, onSignOut }: { token: string; onSignOut: () => 
           </p>
         )}
 
-        <NewEventForm
-          token={token}
-          onCreated={(event) => setEvents((current) => [event, ...(current ?? [])])}
-          onError={handleError}
-        />
+        {tab === 'requests' && <RequestsTab token={token} onCountChange={setOpenRequests} onError={handleError} />}
+        {tab === 'overview' && <OverviewTab token={token} onError={handleError} />}
 
-        {events === null && <p className="admin-muted">Učitavam…</p>}
-        {events?.length === 0 && <p className="admin-muted">Još nema događaja. Napravite prvi iznad.</p>}
+        {tab === 'events' && (
+          <>
+            <NewEventForm
+              token={token}
+              onCreated={(event) => {
+                setEvents((current) => [event, ...(current ?? [])])
+                setFilter('active')
+              }}
+              onError={handleError}
+            />
 
-        {events?.map((event) => (
-          <EventCard
-            key={event.id}
-            event={event}
-            token={token}
-            onChanged={replace}
-            onReload={reload}
-            onRemoved={() => setEvents((current) => current?.filter((known) => known.id !== event.id) ?? null)}
-            onPrint={(name, url) => setPrinting({ name, url })}
-            onError={handleError}
-          />
-        ))}
+            <div className="event-filters">
+              <input
+                type="search"
+                value={search}
+                onChange={(input) => setSearch(input.target.value)}
+                placeholder="Traži događaj…"
+                aria-label="Traži događaj"
+              />
+              <div className="filter-chips">
+                {(Object.keys(FILTER_LABELS) as EventFilter[]).map((key) => (
+                  <button key={key} type="button" className={`chip${filter === key ? ' chip-accent' : ''}`} onClick={() => setFilter(key)}>
+                    {FILTER_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {shown === null && <p className="admin-muted">Učitavam…</p>}
+            {shown?.length === 0 && (
+              <p className="admin-muted">{events?.length === 0 ? 'Još nema događaja. Napravite prvi iznad.' : 'Nijedan događaj ne odgovara.'}</p>
+            )}
+
+            {shown?.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                token={token}
+                onChanged={replace}
+                onReload={reload}
+                onRemoved={() => setEvents((current) => current?.filter((known) => known.id !== event.id) ?? null)}
+                onPrint={(name, url) => setPrinting({ name, url })}
+                onError={handleError}
+              />
+            ))}
+          </>
+        )}
       </main>
 
       {printing && <TableCard name={printing.name} url={printing.url} />}
     </>
+  )
+}
+
+const TYPE_LABELS: Record<AdminRequest['type'], string> = {
+  remove_photo: 'Uklanjanje fotografije',
+  delete_room: 'Brisanje sobe',
+}
+
+interface RequestsTabProps {
+  token: string
+  onCountChange: (count: number) => void
+  onError: (failure: unknown) => void
+}
+
+/** The inbox: guests asking for a photo to be removed, hosts and room admins asking for a deletion. */
+function RequestsTab({ token, onCountChange, onError }: RequestsTabProps) {
+  const [onlyOpen, setOnlyOpen] = useState(true)
+  const [requests, setRequests] = useState<AdminRequest[] | null>(null)
+
+  const load = useCallback(() => {
+    listRequests(token, onlyOpen)
+      .then((result) => {
+        setRequests(result.data)
+        onCountChange(result.open_count)
+      })
+      .catch(onError)
+  }, [onCountChange, onError, onlyOpen, token])
+
+  useEffect(load, [load])
+
+  const decide = async (request: AdminRequest, decision: 'approve' | 'reject') => {
+    const what =
+      request.type === 'remove_photo'
+        ? 'fotografija se briše'
+        : request.is_main_room
+          ? `briše se cijeli događaj „${request.event_name}”`
+          : `briše se soba „${request.room_name}”`
+
+    if (decision === 'approve' && !window.confirm(`Odobriti: ${what}. Ovo se ne može poništiti. Nastaviti?`)) {
+      return
+    }
+
+    try {
+      await resolveRequest(token, request.id, decision)
+      load()
+    } catch (failure) {
+      onError(failure)
+    }
+  }
+
+  return (
+    <section>
+      <div className="filter-chips request-filter">
+        <button type="button" className={`chip${onlyOpen ? ' chip-accent' : ''}`} onClick={() => setOnlyOpen(true)}>
+          Otvoreni
+        </button>
+        <button type="button" className={`chip${onlyOpen ? '' : ' chip-accent'}`} onClick={() => setOnlyOpen(false)}>
+          Svi
+        </button>
+      </div>
+
+      {requests === null && <p className="admin-muted">Učitavam…</p>}
+      {requests?.length === 0 && <p className="admin-muted">Nema zahtjeva.</p>}
+
+      {requests?.map((request) => (
+        <article className="admin-card request-card" key={request.id}>
+          {request.photo && (
+            <a href={request.room_code ? `/r/${request.room_code}` : undefined} target="_blank" rel="noreferrer">
+              <img src={request.photo.thumb_url} alt="" width={88} height={88} />
+            </a>
+          )}
+          <div className="request-body">
+            <h2>
+              {request.type === 'delete_room' && request.is_main_room ? 'Brisanje događaja' : TYPE_LABELS[request.type]}
+            </h2>
+            <p className="admin-muted">
+              {request.event_name}
+              {request.room_name !== request.event_name && ` · ${request.room_name}`} · {formatDate(request.created_at)}
+              {request.from && ` · od: ${request.from}`}
+            </p>
+            <p className="request-reason">„{request.reason}”</p>
+            {request.status === 'open' ? (
+              <div className="room-row-actions">
+                <button type="button" className="button button-danger" onClick={() => decide(request, 'approve')}>
+                  Odobri
+                </button>
+                <button type="button" className="button button-secondary" onClick={() => decide(request, 'reject')}>
+                  Odbij
+                </button>
+              </div>
+            ) : (
+              <p className="admin-muted">{request.status === 'approved' ? 'Odobreno' : 'Odbijeno'}</p>
+            )}
+          </div>
+        </article>
+      ))}
+    </section>
+  )
+}
+
+function formatBytes(bytes: number): string {
+  return bytes >= 1e12 ? `${(bytes / 1e12).toFixed(1)} TB` : `${Math.round(bytes / 1e9)} GB`
+}
+
+function OverviewTab({ token, onError }: { token: string; onError: (failure: unknown) => void }) {
+  const [stats, setStats] = useState<AdminStats | null>(null)
+
+  useEffect(() => {
+    fetchStats(token).then(setStats).catch(onError)
+  }, [onError, token])
+
+  if (!stats) {
+    return <p className="admin-muted">Učitavam…</p>
+  }
+
+  const tiles = [
+    { label: 'Aktivni događaji', value: String(stats.events_active) },
+    { label: 'Istekli (čekaju brisanje)', value: String(stats.events_expired) },
+    { label: 'Fotografije', value: String(stats.photos) },
+    { label: 'Danas poslano', value: String(stats.photos_today) },
+    { label: 'Telefoni', value: String(stats.devices) },
+    { label: 'Otvoreni zahtjevi', value: String(stats.open_requests) },
+    {
+      label: 'Disk',
+      value: stats.disk.used_percent === null ? '–' : `${stats.disk.used_percent}% zauzeto`,
+      hint: stats.disk.total_bytes > 0 ? `${formatBytes(stats.disk.free_bytes)} slobodno od ${formatBytes(stats.disk.total_bytes)}` : undefined,
+    },
+  ]
+
+  return (
+    <div className="stat-grid">
+      {tiles.map((tile) => (
+        <div className="admin-card stat-tile" key={tile.label}>
+          <span className="admin-muted">{tile.label}</span>
+          <strong>{tile.value}</strong>
+          {tile.hint && <span className="admin-muted">{tile.hint}</span>}
+        </div>
+      ))}
+    </div>
   )
 }
 
