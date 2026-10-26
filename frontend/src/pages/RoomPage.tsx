@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react'
+import { wasAskedForName } from '../api/me'
 import { deletePhoto } from '../api/photos'
 import { CameraButton } from '../components/CameraButton'
 import { InviteDialog } from '../components/InviteDialog'
 import { Lightbox } from '../components/Lightbox'
+import { NameDialog } from '../components/NameDialog'
 import { NewRoomDialog } from '../components/NewRoomDialog'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { RoomSwitcher } from '../components/RoomSwitcher'
@@ -20,7 +22,7 @@ const ROLE_LABELS: Record<Exclude<RoomRole, null>, string> = {
   room: 'Admin sobe',
 }
 
-type OpenDialog = 'invite' | 'new-room' | 'rooms' | null
+type OpenDialog = 'invite' | 'new-room' | 'rooms' | 'name' | null
 
 export function RoomPage({ code }: { code: string }) {
   const [adminToken] = useAdminToken()
@@ -95,6 +97,18 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
     [adminToken, photos, removePhoto, roomKey],
   )
 
+  // The upload starts right away; the optional name is asked once, next to it.
+  const takePhotos = useCallback(
+    (files: File[]) => {
+      uploads.enqueue(files)
+
+      if (!wasAskedForName()) {
+        setDialog('name')
+      }
+    },
+    [uploads],
+  )
+
   const canCreateRooms = event.guest_rooms_enabled && event.uploads_open && event.main_room_code !== null
 
   return (
@@ -149,7 +163,7 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
         </p>
       </main>
 
-      {event.uploads_open && <CameraButton onFiles={uploads.enqueue} />}
+      {event.uploads_open && <CameraButton onFiles={takePhotos} />}
 
       {openIndex !== -1 && (
         <Lightbox
@@ -158,11 +172,13 @@ function RoomGallery({ room, role, adminToken, roomKey, onRoomGone }: RoomGaller
           onClose={closeLightbox}
           onNavigate={openPhotoAt}
           onDelete={role ? handleDelete : undefined}
+          moderation={role === 'super' && adminToken ? { adminToken, roomCode: room.code } : undefined}
         />
       )}
 
       {dialog === 'invite' && <InviteDialog room={room} onClose={closeDialog} />}
-      {dialog === 'rooms' && <RoomSwitcher current={room} onClose={closeDialog} />}
+      {dialog === 'rooms' && <RoomSwitcher current={room} onClose={closeDialog} onChangeName={() => setDialog('name')} />}
+      {dialog === 'name' && <NameDialog onClose={closeDialog} />}
       {dialog === 'new-room' && event.main_room_code && (
         <NewRoomDialog eventRoomCode={event.main_room_code} onClose={closeDialog} />
       )}

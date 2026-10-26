@@ -14,6 +14,8 @@ A photo gallery for parties and events, sold per event. Guests scan the QR code 
 | Host of an event | Host link (`/r/{main room}?key=...`), shown on `/admin` | Delete photos in every room of that event |
 | Creator of a guest room | Admin link, shown once after creating the room (and on `/admin`) | Delete photos in that room |
 
+**Who uploaded what.** Every photo remembers the phone that sent it (the device id in the phone's signed cookie, see "Upload rules"). After the first photo a guest is asked once for a name (optional, can be skipped or changed later from "Sobe"); it shows under all their photos, also earlier ones. On `/admin` each event lists its phones with their photo counts: delete everything from one phone, or block it (a blocked phone cannot upload or create rooms). In a room opened as super admin, the full-screen photo shows which phone sent it, with one button to delete all its photos in the event and block it.
+
 Wrong keys count against `PHOTOS_ADMIN_RATE_LIMIT` per IP per minute. Deleting a room or an event hides it at once and removes the photos in the background. `/` is a static page that explains the product and calls no API.
 
 ## How it works
@@ -145,4 +147,6 @@ Back up the Docker setup with `bash scripts/backup.sh` (database dump plus all p
 
 ## Privacy
 
-Photos are public to anyone with the link. Metadata is removed during processing, but guests should still be told that their photos will be shown publicly.
+Photos are visible to everyone who has the room link; the gallery says so under the photos. Metadata (EXIF, GPS) is removed during processing.
+
+About guests, the server keeps only: a random device id (in an HttpOnly cookie, 30 days), the name if the guest typed one, a short description such as "iPhone · Safari" (not the full user agent), and when the phone was last seen. No account, no e-mail, no phone number.

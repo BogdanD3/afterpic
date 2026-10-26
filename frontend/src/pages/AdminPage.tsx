@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { createEvent, deleteEvent, deleteRoom, listEvents, rotateRoomCode, updateEvent, type EventChanges } from '../api/admin'
 import { ApiError } from '../api/photos'
 import { CopyButton } from '../components/CopyButton'
+import { EventDevices } from '../components/EventDevices'
 import { QrCode } from '../components/QrCode'
 import { useAdminToken } from '../hooks/useAdminToken'
 import { formatDate, roomAdminUrl, roomUrl } from '../lib/links'
@@ -227,6 +228,7 @@ interface EventCardProps {
 
 function EventCard({ event, token, onChanged, onReload, onRemoved, onPrint, onError }: EventCardProps) {
   const [open, setOpen] = useState(false)
+  const [showDevices, setShowDevices] = useState(false)
   const [days, setDays] = useState('')
   const [busy, setBusy] = useState(false)
   const main = event.rooms.find((room) => room.is_main)
@@ -331,6 +333,15 @@ function EventCard({ event, token, onChanged, onReload, onRemoved, onPrint, onEr
           {guestRooms.map((room) => (
             <RoomRow key={room.code} room={room} token={token} onChanged={onReload} onError={onError} />
           ))}
+
+          <h3>Telefoni</h3>
+          {showDevices ? (
+            <EventDevices token={token} eventId={event.id} onPhotosDeleted={onReload} onError={onError} />
+          ) : (
+            <button type="button" className="button button-secondary" onClick={() => setShowDevices(true)}>
+              Prikaži ko je šta poslao
+            </button>
+          )}
 
           <button type="button" className="button button-danger" onClick={remove}>
             Obriši događaj

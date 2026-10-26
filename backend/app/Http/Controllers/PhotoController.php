@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StorePhotoRequest;
 use App\Http\Resources\PhotoResource;
 use App\Jobs\ProcessPhotoJob;
+use App\Models\Device;
 use App\Models\Photo;
 use App\Models\Room;
 use App\Services\AdminAccess;
@@ -60,6 +61,11 @@ class PhotoController extends Controller
 
         $uuid = (string) Str::uuid();
         $file = $request->file('photo');
+        $deviceId = $request->attributes->get('device_id');
+
+        if (is_string($deviceId)) {
+            Device::seen($deviceId, $request);
+        }
 
         try {
             $originalPath = Storage::disk('local')->putFileAs("photos/{$uuid}", $file, 'original');
@@ -85,6 +91,7 @@ class PhotoController extends Controller
                 'uuid' => $uuid,
                 'upload_id' => $uploadId,
                 'room_id' => $room->id,
+                'device_id' => is_string($deviceId) ? $deviceId : null,
                 'status' => Photo::STATUS_PENDING,
                 'original_path' => $originalPath,
                 'mime_type' => $file->getMimeType(),
@@ -120,6 +127,7 @@ class PhotoController extends Controller
     {
         $photos = $room->photos()
             ->processed()
+            ->with('device:id,name')
             ->orderByDesc('created_at')
             ->orderByDesc('uuid')
             ->cursorPaginate(config('photos.per_page'))
@@ -185,6 +193,7 @@ class PhotoController extends Controller
 
         $photos = $room->photos()
             ->processed()
+            ->with('device:id,name')
             ->where(function (Builder $query) use ($afterId, $since): void {
                 $query->where('id', '>', $afterId)
                     ->orWhere('updated_at', '>=', Carbon::createFromTimestamp($since));
@@ -248,7 +257,7 @@ class PhotoController extends Controller
      */
     public function show(string $uuid): PhotoResource
     {
-        $photo = Photo::visible()->where('uuid', $uuid)->firstOrFail();
+        $photo = Photo::visible()->with('device:id,name')->where('uuid', $uuid)->firstOrFail();
 
         return new PhotoResource($photo);
     }

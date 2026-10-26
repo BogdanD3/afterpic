@@ -5,6 +5,8 @@ export interface Photo {
   width: number
   height: number
   created_at: string
+  // The name the uploader chose, if any.
+  uploader_name: string | null
 }
 
 export interface GalleryPage {
@@ -66,4 +68,14 @@ export interface AdminEvent {
   host_key: string
   photos_count: number
   rooms: AdminRoom[]
+}
+
+export interface AdminDevice {
+  id: string
+  name: string | null
+  // A short description such as "iPhone · Safari".
+  client: string | null
+  blocked: boolean
+  last_seen_at: string | null
+  photos_count: number | null
 }

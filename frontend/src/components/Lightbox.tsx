@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { canSharePhotos, downloadPhoto, sharePhoto } from '../api/photos'
 import '../lightbox-download.css'
+import { PhotoModeration } from './PhotoModeration'
 import type { Photo } from '../types'
 
 function DownloadButtons({ uuid, onDelete }: { uuid: string; onDelete?: (uuid: string) => Promise<void> }) {
@@ -82,11 +83,13 @@ interface LightboxProps {
   onClose: () => void
   onNavigate: (index: number) => void
   onDelete?: (uuid: string) => Promise<void>
+  // Super admin only: who sent the photo, remove everything from that phone.
+  moderation?: { adminToken: string; roomCode: string }
 }
 
 const SWIPE_THRESHOLD_PX = 50
 
-export function Lightbox({ photos, index, onClose, onNavigate, onDelete }: LightboxProps) {
+export function Lightbox({ photos, index, onClose, onNavigate, onDelete, moderation }: LightboxProps) {
   const touchStartX = useRef<number | null>(null)
   const photo = photos[index]
   const hasPrevious = index > 0
@@ -152,6 +155,18 @@ export function Lightbox({ photos, index, onClose, onNavigate, onDelete }: Light
       )}
 
       <img className="lightbox-photo" src={photo.web_url} alt="" onClick={onClose} />
+
+      {photo.uploader_name && <p className="lightbox-caption">📷 {photo.uploader_name}</p>}
+
+      {moderation && (
+        <PhotoModeration
+          key={photo.uuid}
+          uuid={photo.uuid}
+          adminToken={moderation.adminToken}
+          roomCode={moderation.roomCode}
+          onDone={onClose}
+        />
+      )}
 
       <DownloadButtons key={photo.uuid} uuid={photo.uuid} onDelete={onDelete} />
 

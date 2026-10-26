@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Device;
 use App\Services\DeviceIdentity;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,8 @@ class LimitPhotoUploads
      * A phone that uploads in bursts no person can make is blocked for a
      * while; a repeat offence gets a longer block. See photos.upload_limits
      * for the numbers.
+     *
+     * A phone the admin blocked gets 403 and is not counted.
      *
      * Every request that passes the checks counts, also ones the validation
      * rejects afterwards. The device id is available to the controller as
@@ -48,6 +51,8 @@ class LimitPhotoUploads
             }
 
             $device = $this->devices->issue($request);
+        } elseif (Device::isBlocked($device)) {
+            return response()->json(['message' => 'This phone is blocked.'], 403);
         }
 
         $blockedUntil = Cache::get("uploads-blocked:{$device}");

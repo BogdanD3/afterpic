@@ -1,4 +1,4 @@
-import type { AdminEvent } from '../types'
+import type { AdminDevice, AdminEvent } from '../types'
 import { ApiError, resolveUrl } from './photos'
 
 /** Super admin API. Every call needs the admin token; 401 means a wrong token. */
@@ -64,4 +64,27 @@ export async function deleteRoom(token: string, code: string): Promise<void> {
 
 export async function rotateRoomCode(token: string, code: string): Promise<string> {
   return (await adminRequest<{ code: string }>(token, 'POST', `/rooms/${encodeURIComponent(code)}/rotate-code`)).code
+}
+
+export async function listEventDevices(token: string, eventId: number): Promise<AdminDevice[]> {
+  return (await adminRequest<{ data: AdminDevice[] }>(token, 'GET', `/devices?event_id=${eventId}`)).data
+}
+
+export async function fetchPhotoDevice(token: string, uuid: string): Promise<AdminDevice | null> {
+  return (await adminRequest<{ data: AdminDevice | null }>(token, 'GET', `/photos/${uuid}/device`)).data
+}
+
+/** Delete every photo of a phone in one event, named by its id or by one of its room codes. */
+export async function deleteDevicePhotos(
+  token: string,
+  deviceId: string,
+  scope: { eventId: number } | { roomCode: string },
+): Promise<number> {
+  const query = 'eventId' in scope ? `event_id=${scope.eventId}` : `room=${encodeURIComponent(scope.roomCode)}`
+
+  return (await adminRequest<{ deleted: number }>(token, 'DELETE', `/devices/${deviceId}/photos?${query}`)).deleted
+}
+
+export async function setDeviceBlocked(token: string, deviceId: string, blocked: boolean): Promise<AdminDevice> {
+  return (await adminRequest<{ data: AdminDevice }>(token, blocked ? 'POST' : 'DELETE', `/devices/${deviceId}/block`)).data
 }

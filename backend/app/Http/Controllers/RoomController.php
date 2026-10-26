@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\RoomResource;
+use App\Models\Device;
 use App\Models\Room;
 use App\Services\AdminAccess;
 use App\Services\DeviceIdentity;
@@ -75,7 +76,11 @@ class RoomController extends Controller
             }
 
             $device = $devices->issue($request);
+        } elseif (Device::isBlocked($device)) {
+            return response()->json(['message' => 'This phone is blocked.'], 403);
         }
+
+        Device::seen($device, $request);
 
         $limitKey = "guest-rooms-device:{$device}";
         $perDay = (int) config('photos.events.guest_rooms_per_device_per_day');

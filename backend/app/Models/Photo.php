@@ -30,6 +30,7 @@ class Photo extends Model
         'uuid',
         'upload_id',
         'room_id',
+        'device_id',
         'status',
         'original_path',
         'web_path',
@@ -46,6 +47,16 @@ class Photo extends Model
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
+    }
+
+    /**
+     * The phone that uploaded the photo. Null for photos from before devices were kept.
+     *
+     * @return BelongsTo<Device, $this>
+     */
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(Device::class);
     }
 
     /**

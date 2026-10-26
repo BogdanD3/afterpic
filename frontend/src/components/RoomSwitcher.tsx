@@ -3,7 +3,13 @@ import type { Room } from '../types'
 import { Dialog } from './Dialog'
 
 /** Rooms this phone has opened, so switching back is one tap. */
-export function RoomSwitcher({ current, onClose }: { current: Room; onClose: () => void }) {
+interface RoomSwitcherProps {
+  current: Room
+  onClose: () => void
+  onChangeName: () => void
+}
+
+export function RoomSwitcher({ current, onClose, onChangeName }: RoomSwitcherProps) {
   const mainCode = current.event.main_room_code
   const rooms = rememberedRooms().filter((room) => room.code !== current.code)
 
@@ -30,6 +36,11 @@ export function RoomSwitcher({ current, onClose }: { current: Room; onClose: () 
       {rooms.length === 0 && (current.is_main || !mainCode) && (
         <p className="dialog-text">Ovdje će se pojaviti sobe koje otvorite na ovom telefonu.</p>
       )}
+      <div className="dialog-actions">
+        <button type="button" className="button button-secondary" onClick={onChangeName}>
+          Moje ime uz fotografije
+        </button>
+      </div>
     </Dialog>
   )
 }
