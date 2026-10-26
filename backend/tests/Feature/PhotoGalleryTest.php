@@ -31,7 +31,7 @@ class PhotoGalleryTest extends TestCase
         $created = Photo::factory()->count(5)->create();
 
         $seen = [];
-        $path = '/api/photos';
+        $path = $this->photosUrl();
 
         while ($path !== null) {
             $response = $this->getJson($path)->assertOk();
@@ -77,7 +77,7 @@ class PhotoGalleryTest extends TestCase
         $photo = $this->getJson($this->photosUrl())->json('data.0');
 
         $this->assertEqualsCanonicalizing(
-            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at'],
+            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at', 'uploader_name'],
             array_keys($photo),
         );
     }

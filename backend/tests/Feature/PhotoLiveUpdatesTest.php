@@ -97,7 +97,7 @@ class PhotoLiveUpdatesTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
 
-        $this->getJson('/api/photos/updates?cursor=abc')
+        $this->getJson($this->photosUrl().'/updates?cursor=abc')
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
 
@@ -114,6 +114,7 @@ class PhotoLiveUpdatesTest extends TestCase
 
     public function test_cursor_of_another_room_is_rejected(): void
     {
+        $this->room();
         $other = Room::factory()->create();
 
         $this->getJson($this->photosUrl().'/updates?cursor='.urlencode($this->updatesCursor(0, 0, $other)))
@@ -128,7 +129,7 @@ class PhotoLiveUpdatesTest extends TestCase
         $photo = $this->getJson($this->updatesUrl(0))->json('data.0');
 
         $this->assertEqualsCanonicalizing(
-            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at'],
+            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at', 'uploader_name'],
             array_keys($photo),
         );
     }
