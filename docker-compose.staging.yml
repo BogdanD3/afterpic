@@ -1,0 +1,19 @@
+# Staging: a second, separate copy of the app on the same server, for
+# trying a branch before it is merged. scripts/staging.sh uses it on top of
+# the branch's own docker-compose.yml (project name "afterpic-staging").
+# Everything gets its own name, so staging never touches the live
+# containers, image, database or photos. The port comes from APP_PORT in the
+# staging .env.
+
+services:
+  db:
+    container_name: photo-gallery-staging-db
+  app:
+    container_name: photo-gallery-staging-app
+    image: photo-gallery:staging
+
+volumes:
+  photo-gallery-db:
+    name: PhotoGallery-Staging-DB
+  photo-gallery-storage:
+    name: PhotoGallery-Staging-Storage

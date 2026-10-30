@@ -106,6 +106,29 @@ A production deployment needs:
 
 `python3 scripts/load-test.py <url> --photo <phone photo>` makes many fake phones upload at the same moment (default 50 phones x 3 photos) while 100 fake guests keep the gallery open, then waits until every photo is processed and prints upload times, processing time and errors. `--admin-token` deletes the test photos afterwards. Run it on the server against the local port to measure the server alone, and from outside to measure the whole path. `--help` lists the options and limits.
 
+## Staging (try a branch before merging)
+
+One extra copy of the app runs on the same server, next to the live one, with its own containers, image, database, photos and port. Only `scripts/staging.sh` manages it, run from the live checkout (`~/afterpic`, on `main`). It works on a second clone, `~/afterpic-staging`.
+
+Once:
+
+```bash
+cd ~/afterpic
+bash scripts/staging.sh setup https://your-host:14444   # clones ~/afterpic-staging, copies .env with APP_PORT=9003 and this APP_URL
+```
+
+Then make that URL reach `127.0.0.1:9003` over HTTPS, the same way the live URL reaches `127.0.0.1:9002`. With Nginx, copy the live server block, change `listen` to the new port and `proxy_pass` to `9003`. With Tailscale: `sudo tailscale serve --bg --https=14444 http://127.0.0.1:9003` (`funnel` instead of `serve` for people outside the tailnet).
+
+For every branch:
+
+```bash
+bash scripts/staging.sh deploy feature/my-branch   # fetch, check out, build, start; migrations run
+bash scripts/staging.sh copy-live-data             # optional: test the migrations on a copy of the live data
+bash scripts/staging.sh status | logs | reset | down
+```
+
+`copy-live-data` only reads the live app (a database dump and a copy of the photos) and replaces the staging data with it, then starts staging, so the branch's migrations run on real data. `reset` empties staging. Staging uses the same `PHOTOS_ADMIN_TOKEN` as live unless you change it in `~/afterpic-staging/.env`.
+
 ## Retention and backups
 
 Photos older than `PHOTOS_RETENTION_DAYS` are deleted every night at 03:30 (database row and files). See what would be deleted with:
