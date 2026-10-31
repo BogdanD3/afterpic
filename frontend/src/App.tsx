@@ -1,76 +1,31 @@
-import { useCallback, useState } from 'react'
-import { deletePhoto } from './api/photos'
-import { CameraButton } from './components/CameraButton'
-import { Lightbox } from './components/Lightbox'
-import { PhotoGrid } from './components/PhotoGrid'
-import { useAdminToken } from './hooks/useAdminToken'
-import { useGallery } from './hooks/useGallery'
-import { useUploads } from './hooks/useUploads'
+import { AdminPage } from './pages/AdminPage'
+import { Landing } from './pages/Landing'
+import { RoomPage } from './pages/RoomPage'
 
+/**
+ * Three pages, picked by the path (Nginx serves index.html for all of them):
+ * `/` the landing page, `/r/{code}` a room, `/admin` the super admin page.
+ */
 export default function App() {
-  const gallery = useGallery()
-  const { photos, removePhoto } = gallery
-  const uploads = useUploads(gallery.addPhoto)
-  const adminToken = useAdminToken()
-  // The open photo is kept by uuid, so it stays the same photo when others
-  // are added or deleted, and the lightbox closes when it is deleted itself.
-  const [openUuid, setOpenUuid] = useState<string | null>(null)
-  const openIndex = openUuid === null ? -1 : photos.findIndex((photo) => photo.uuid === openUuid)
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  const room = /^\/r\/([a-z0-9-]+)$/.exec(path)
 
-  const closeLightbox = useCallback(() => setOpenUuid(null), [])
+  if (room) {
+    return <RoomPage code={room[1]} />
+  }
 
-  const openPhotoAt = useCallback((index: number) => setOpenUuid(photos[index]?.uuid ?? null), [photos])
+  if (path === '/admin') {
+    return <AdminPage />
+  }
 
-  const handleDelete = useCallback(
-    async (uuid: string) => {
-      if (adminToken === null) {
-        return
-      }
-
-      const deletedIndex = photos.findIndex((photo) => photo.uuid === uuid)
-
-      await deletePhoto(uuid, adminToken)
-      removePhoto(uuid)
-
-      // The next photo moves into the deleted one's place; step back only at the end.
-      const remaining = photos.filter((photo) => photo.uuid !== uuid)
-
-      setOpenUuid(remaining[Math.min(deletedIndex, remaining.length - 1)]?.uuid ?? null)
-    },
-    [adminToken, photos, removePhoto],
-  )
+  if (path === '/') {
+    return <Landing />
+  }
 
   return (
-    <div className="app">
-      <main className="gallery-page">
-        {gallery.hasError && (
-          <p className="notice" role="alert">
-            Galerija se trenutno ne može učitati.
-          </p>
-        )}
-
-        <PhotoGrid
-          photos={gallery.photos}
-          uploads={uploads.items}
-          isLoading={gallery.isLoading}
-          hasMore={gallery.hasMore}
-          onLoadMore={gallery.loadMore}
-          onOpen={openPhotoAt}
-          onDismissUpload={uploads.removeItem}
-        />
-      </main>
-
-      <CameraButton onFiles={uploads.enqueue} />
-
-      {openIndex !== -1 && (
-        <Lightbox
-          photos={gallery.photos}
-          index={openIndex}
-          onClose={closeLightbox}
-          onNavigate={openPhotoAt}
-          onDelete={adminToken ? handleDelete : undefined}
-        />
-      )}
-    </div>
+    <main className="message-page">
+      <h1>Stranica ne postoji</h1>
+      <p>Otvorite link ili skenirajte QR kod koji ste dobili za svoj događaj.</p>
+    </main>
   )
 }

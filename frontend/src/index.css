@@ -259,3 +259,230 @@ body {
 .lightbox-nav.next {
   right: 12px;
 }
+
+/* Shared controls: buttons, forms, dialogs, simple message pages. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.button-secondary {
+  background: #fff;
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.button-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--color-muted);
+}
+
+.field input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.checkbox input {
+  width: 20px;
+  height: 20px;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+@media (min-width: 720px) {
+  .dialog-backdrop {
+    align-items: center;
+  }
+}
+
+.dialog {
+  width: 100%;
+  max-width: 440px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: #fff;
+}
+
+@media (min-width: 720px) {
+  .dialog {
+    border-radius: 18px;
+  }
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.dialog-close {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-bg);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.dialog-text {
+  margin: 0 0 12px;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.qr-box {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+}
+
+.link-text {
+  margin: 4px 0 0;
+  font-size: 13px;
+  text-align: center;
+  word-break: break-all;
+  color: var(--color-muted);
+}
+
+.admin-link-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fef9c3;
+  font-size: 14px;
+}
+
+.admin-link-box p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.message-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 64px 20px;
+  text-align: center;
+}
+
+.message-page h1 {
+  font-size: 22px;
+}
+
+.message-page p {
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.field textarea {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+
+/* Small pill buttons: room header actions, admin filters. */
+
+.chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+  cursor: pointer;
+}
+
+.chip-accent {
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow: none;
+}

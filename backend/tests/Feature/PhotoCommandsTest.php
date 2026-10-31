@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Event;
 use App\Models\Photo;
+use App\Models\Room;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,6 +15,14 @@ use Tests\TestCase;
 class PhotoCommandsTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Photo retention only applies to events that never expire (the first room is one).
+        Room::factory()->for(Event::factory()->state(['expires_at' => null]))->create();
+    }
 
     public function test_stale_pending_photos_are_marked_as_failed(): void
     {
@@ -53,6 +63,19 @@ class PhotoCommandsTest extends TestCase
 
         Storage::disk('local')->assertExists("photos/{$recent->uuid}/download.jpg");
         Storage::disk('public')->assertExists("photos/{$recent->uuid}/web.webp");
+    }
+
+    public function test_retention_leaves_events_with_an_expiry_date_alone(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $room = Room::factory()->create();
+        $photo = Photo::factory()->for($room)->create(['created_at' => now()->subDays(60)]);
+
+        $this->artisan('app:prune-old-photos')->assertSuccessful();
+
+        $this->assertModelExists($photo);
     }
 
     public function test_dry_run_lists_old_photos_without_deleting_anything(): void

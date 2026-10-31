@@ -108,6 +108,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Events and rooms
+    |--------------------------------------------------------------------------
+    |
+    | default_days: a new event expires after this many days unless the admin
+    | chooses another number (0 = never). At expiry uploads close; the host
+    | can still view and download for grace_days, then the nightly
+    | app:prune-expired-events deletes the event with all rooms and photos.
+    |
+    | guest_rooms_per_device_per_day: how many rooms one phone may create, in
+    | events that allow guest rooms.
+    |
+    */
+
+    'events' => [
+        'default_days' => (int) env('PHOTOS_EVENT_DAYS', 30),
+        'grace_days' => (int) env('PHOTOS_EVENT_GRACE_DAYS', 3),
+        'guest_rooms_per_device_per_day' => (int) env('PHOTOS_GUEST_ROOMS_PER_PHONE', 5),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Gallery and polling
     |--------------------------------------------------------------------------
     */
@@ -128,10 +149,11 @@ return [
     | Retention and disk space
     |--------------------------------------------------------------------------
     |
-    | Every night, photos older than `days` are deleted: the database row and
-    | both folders (private and public). Set PHOTOS_RETENTION_ENABLED=false to
-    | keep everything, for example during a long event. Check what would be
-    | deleted with: php artisan app:prune-old-photos --dry-run
+    | Only for events that never expire (no expiry date, for example a demo):
+    | every night, their photos older than `days` are deleted, the database
+    | row and both folders. Events with an expiry date are deleted as a whole
+    | instead (see photos.events). Set PHOTOS_RETENTION_ENABLED=false to keep
+    | everything. Check with: php artisan app:prune-old-photos --dry-run
     |
     | disk_warning_percent: the hourly disk check logs a warning when the
     | storage disk is at least this full.

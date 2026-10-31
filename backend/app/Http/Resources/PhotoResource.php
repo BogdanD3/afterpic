@@ -28,6 +28,8 @@ class PhotoResource extends JsonResource
             'width' => $this->width,
             'height' => $this->height,
             'created_at' => $this->created_at->toIso8601String(),
+            // The name the uploader chose, if any. Never the device id.
+            'uploader_name' => $this->device?->name,
         ];
     }
 }

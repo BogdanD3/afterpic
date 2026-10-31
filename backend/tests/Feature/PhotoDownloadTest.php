@@ -24,7 +24,7 @@ class PhotoDownloadTest extends TestCase
     {
         config(['photos.download.keep_originals' => true]);
 
-        $upload = $this->postJson('/api/photos', [
+        $upload = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('photo.jpg', 800, 600),
         ])->assertAccepted();
 
@@ -41,7 +41,7 @@ class PhotoDownloadTest extends TestCase
 
     public function test_by_default_a_large_upload_is_downloaded_as_a_smaller_jpeg_and_the_original_is_deleted(): void
     {
-        $upload = $this->postJson('/api/photos', [
+        $upload = $this->postJson($this->photosUrl(), [
             'photo' => UploadedFile::fake()->image('big.png', 4000, 3000),
         ])->assertAccepted();
 

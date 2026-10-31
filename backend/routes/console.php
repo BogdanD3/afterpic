@@ -9,6 +9,8 @@ Schedule::command('queue:prune-failed', ['--hours' => 168])->daily();
 
 Schedule::command('app:prune-old-photos')->dailyAt('03:30')->withoutOverlapping();
 
+Schedule::command('app:prune-expired-events')->dailyAt('03:00')->withoutOverlapping();
+
 Schedule::command('app:check-disk-space')->hourly();
 
 // Open pages learn about deleted photos from this log (see PhotoController::updates).

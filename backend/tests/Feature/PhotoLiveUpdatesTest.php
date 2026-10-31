@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Photo;
+use App\Models\Room;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
@@ -92,21 +93,31 @@ class PhotoLiveUpdatesTest extends TestCase
 
     public function test_missing_tampered_or_forged_cursor_is_rejected(): void
     {
-        $this->getJson('/api/photos/updates')
+        $this->getJson($this->photosUrl().'/updates')
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
 
-        $this->getJson('/api/photos/updates?cursor=abc')
+        $this->getJson($this->photosUrl().'/updates?cursor=abc')
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
 
         // A guest cannot build a cursor: plain JSON is not accepted.
-        $this->getJson('/api/photos/updates?cursor='.urlencode(base64_encode('{"after_id":0,"since":0}')))
+        $this->getJson($this->photosUrl().'/updates?cursor='.urlencode(base64_encode('{"after_id":0,"since":0}')))
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
 
         // Encrypted, but not the expected shape.
-        $this->getJson('/api/photos/updates?cursor='.urlencode(Crypt::encryptString('{"after_id":"x"}')))
+        $this->getJson($this->photosUrl().'/updates?cursor='.urlencode(Crypt::encryptString('{"after_id":"x"}')))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrorFor('cursor');
+    }
+
+    public function test_cursor_of_another_room_is_rejected(): void
+    {
+        $this->room();
+        $other = Room::factory()->create();
+
+        $this->getJson($this->photosUrl().'/updates?cursor='.urlencode($this->updatesCursor(0, 0, $other)))
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
     }
@@ -118,7 +129,7 @@ class PhotoLiveUpdatesTest extends TestCase
         $photo = $this->getJson($this->updatesUrl(0))->json('data.0');
 
         $this->assertEqualsCanonicalizing(
-            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at'],
+            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at', 'uploader_name'],
             array_keys($photo),
         );
     }
@@ -190,17 +201,17 @@ class PhotoLiveUpdatesTest extends TestCase
         $newest = Photo::factory()->create();
         Photo::factory()->pending()->create();
 
-        $response = $this->getJson('/api/photos')->assertOk();
+        $response = $this->getJson($this->photosUrl())->assertOk();
 
         $this->assertArrayNotHasKey('latest_id', $response->json());
 
         $cursor = json_decode(Crypt::decryptString($response->json('updates_cursor')), true);
 
-        $this->assertSame(['after_id' => $newest->id, 'since' => now()->timestamp - 30], $cursor);
+        $this->assertSame(['room_id' => $this->room()->id, 'after_id' => $newest->id, 'since' => now()->timestamp - 30], $cursor);
     }
 
     /**
-     * @return array{after_id: int, since: int}
+     * @return array{room_id: int, after_id: int, since: int}
      */
     private function nextCursor(TestResponse $response): array
     {

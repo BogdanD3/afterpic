@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StorePhotoRequest;
 use App\Http\Resources\PhotoResource;
 use App\Jobs\ProcessPhotoJob;
+use App\Models\Device;
 use App\Models\Photo;
+use App\Models\Room;
+use App\Services\AdminAccess;
 use Carbon\Carbon;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,9 +44,15 @@ class PhotoController extends Controller
      * The phone sends the same `upload_id` with every retry of one photo.
      * When the first attempt was stored but its response got lost, the retry
      * gets that photo back instead of a duplicate.
+     *
+     * Uploads are refused (403) once the event has expired or the admin closed them.
      */
-    public function store(StorePhotoRequest $request): JsonResponse
+    public function store(StorePhotoRequest $request, Room $room): JsonResponse
     {
+        if (! $room->event->acceptsUploads()) {
+            return response()->json(['message' => 'Uploads are closed for this event.'], 403);
+        }
+
         $uploadId = $request->validated('upload_id');
 
         if ($uploadId !== null && ($existing = Photo::where('upload_id', $uploadId)->first())) {
@@ -52,6 +61,11 @@ class PhotoController extends Controller
 
         $uuid = (string) Str::uuid();
         $file = $request->file('photo');
+        $deviceId = $request->attributes->get('device_id');
+
+        if (is_string($deviceId)) {
+            Device::seen($deviceId, $request);
+        }
 
         try {
             $originalPath = Storage::disk('local')->putFileAs("photos/{$uuid}", $file, 'original');
@@ -76,6 +90,8 @@ class PhotoController extends Controller
             $photo = Photo::create([
                 'uuid' => $uuid,
                 'upload_id' => $uploadId,
+                'room_id' => $room->id,
+                'device_id' => is_string($deviceId) ? $deviceId : null,
                 'status' => Photo::STATUS_PENDING,
                 'original_path' => $originalPath,
                 'mime_type' => $file->getMimeType(),
@@ -101,23 +117,26 @@ class PhotoController extends Controller
     }
 
     /**
-     * List processed photos, newest first, with cursor pagination.
+     * List the room's processed photos, newest first, with cursor pagination.
      *
      * Pages are ordered by created_at and uuid, so the page cursor contains
      * no internal id. The `next` link is a path without host, so it is right
      * behind any proxy. `updates_cursor` starts the polling for new photos.
      */
-    public function index(): AnonymousResourceCollection
+    public function index(Room $room): AnonymousResourceCollection
     {
-        $photos = Photo::processed()
+        $photos = $room->photos()
+            ->processed()
+            ->with('device:id,name')
             ->orderByDesc('created_at')
             ->orderByDesc('uuid')
             ->cursorPaginate(config('photos.per_page'))
-            ->withPath(route('photos.index', absolute: false));
+            ->withPath(route('rooms.photos.index', $room, absolute: false));
 
         return PhotoResource::collection($photos)->additional([
             'updates_cursor' => $this->encodeUpdatesCursor(
-                (int) Photo::processed()->max('id'),
+                $room,
+                (int) $room->photos()->processed()->max('id'),
                 now()->timestamp - (int) config('photos.updates_since_overlap_seconds'),
             ),
         ]);
@@ -128,8 +147,8 @@ class PhotoController extends Controller
      *
      * The client sends back the `cursor` of its previous answer (the first
      * one comes from the gallery page). It is encrypted, so guests never see
-     * internal ids. Inside are `after_id` (highest id already sent) and
-     * `since` (unix time).
+     * internal ids. Inside are the room, `after_id` (highest id already sent)
+     * and `since` (unix time). A cursor of another room is rejected.
      *
      * Two workers can finish photos out of order, so a photo with a LOWER id
      * can become ready after one with a higher id. Asking only for
@@ -145,13 +164,13 @@ class PhotoController extends Controller
      * admin or the nightly retention), so open pages remove them. Like the
      * photos, it can repeat a uuid; the client ignores ones it does not show.
      */
-    public function updates(Request $request): JsonResponse
+    public function updates(Request $request, Room $room): JsonResponse
     {
         $validated = $request->validate([
             'cursor' => ['required', 'string', 'max:1000'],
         ]);
 
-        $cursor = $this->decodeUpdatesCursor($validated['cursor']);
+        $cursor = $this->decodeUpdatesCursor($room, $validated['cursor']);
 
         if ($cursor === null) {
             throw ValidationException::withMessages(['cursor' => 'The cursor is invalid.']);
@@ -160,18 +179,21 @@ class PhotoController extends Controller
         ['after_id' => $afterId, 'since' => $since] = $cursor;
         $limit = (int) config('photos.updates_limit');
 
-        $latestId = (int) Photo::processed()->max('id');
-        $latestChange = (string) Photo::processed()->max('updated_at');
-        $latestDeletionId = (int) DB::table('photo_deletions')->max('id');
+        $latestId = (int) $room->photos()->processed()->max('id');
+        $latestChange = (string) $room->photos()->processed()->max('updated_at');
+        $latestDeletionId = (int) DB::table('photo_deletions')->where('room_id', $room->id)->max('id');
 
         $deleted = DB::table('photo_deletions')
+            ->where('room_id', $room->id)
             ->where('deleted_at', '>=', Carbon::createFromTimestamp($since))
             ->orderBy('id')
             ->pluck('uuid')
             ->unique()
             ->values();
 
-        $photos = Photo::processed()
+        $photos = $room->photos()
+            ->processed()
+            ->with('device:id,name')
             ->where(function (Builder $query) use ($afterId, $since): void {
                 $query->where('id', '>', $afterId)
                     ->orWhere('updated_at', '>=', Carbon::createFromTimestamp($since));
@@ -184,6 +206,7 @@ class PhotoController extends Controller
         $photos = $photos->take($limit);
 
         $nextCursor = $this->encodeUpdatesCursor(
+            $room,
             max($afterId, (int) $photos->max('id')),
             $hasMore ? $since : now()->timestamp - (int) config('photos.updates_since_overlap_seconds'),
         );
@@ -202,15 +225,19 @@ class PhotoController extends Controller
         return $response;
     }
 
-    private function encodeUpdatesCursor(int $afterId, int $since): string
+    private function encodeUpdatesCursor(Room $room, int $afterId, int $since): string
     {
-        return Crypt::encryptString(json_encode(['after_id' => $afterId, 'since' => max(0, $since)]));
+        return Crypt::encryptString(json_encode([
+            'room_id' => $room->id,
+            'after_id' => $afterId,
+            'since' => max(0, $since),
+        ]));
     }
 
     /**
      * @return array{after_id: int, since: int}|null
      */
-    private function decodeUpdatesCursor(string $cursor): ?array
+    private function decodeUpdatesCursor(Room $room, string $cursor): ?array
     {
         try {
             $data = json_decode(Crypt::decryptString($cursor), true);
@@ -218,7 +245,7 @@ class PhotoController extends Controller
             return null;
         }
 
-        if (! is_int($data['after_id'] ?? null) || ! is_int($data['since'] ?? null)) {
+        if (($data['room_id'] ?? null) !== $room->id || ! is_int($data['after_id'] ?? null) || ! is_int($data['since'] ?? null)) {
             return null;
         }
 
@@ -230,7 +257,7 @@ class PhotoController extends Controller
      */
     public function show(string $uuid): PhotoResource
     {
-        $photo = Photo::processed()->where('uuid', $uuid)->firstOrFail();
+        $photo = Photo::visible()->with('device:id,name')->where('uuid', $uuid)->firstOrFail();
 
         return new PhotoResource($photo);
     }
@@ -249,13 +276,29 @@ class PhotoController extends Controller
     }
 
     /**
-     * Delete a photo and its files. Admin only (see RequirePhotoAdmin).
+     * Delete a photo and its files.
      *
-     * Any status can be deleted, so pending and failed photos can be removed too.
+     * Allowed for the super admin (X-Admin-Token), the event's host and the
+     * admin of the photo's guest room (X-Room-Key), see AdminAccess. Any
+     * status can be deleted, so pending and failed photos can be removed too.
      */
-    public function destroy(string $uuid): Response
+    public function destroy(Request $request, AdminAccess $access, string $uuid): Response
     {
-        $photo = Photo::where('uuid', $uuid)->firstOrFail();
+        $waitSeconds = $access->secondsUntilRetryAllowed($request);
+
+        if ($waitSeconds > 0) {
+            return response()->json(['message' => 'Too many attempts.'], 429, ['Retry-After' => (string) $waitSeconds]);
+        }
+
+        $photo = Photo::with('room.event')->where('uuid', $uuid)->firstOrFail();
+
+        if ($access->roleFor($request, $photo->room) === null) {
+            if ($access->presentedAKey($request)) {
+                $access->recordFailure($request);
+            }
+
+            return response()->json(['message' => 'Unauthorized.'], 401);
+        }
 
         if (! $photo->deleteWithFiles()) {
             return response()->json([
@@ -276,7 +319,7 @@ class PhotoController extends Controller
      */
     public function download(string $uuid): Response
     {
-        $photo = Photo::processed()->where('uuid', $uuid)->firstOrFail();
+        $photo = Photo::visible()->where('uuid', $uuid)->firstOrFail();
 
         $disk = Storage::disk('local');
         $downloadPath = Photo::downloadPathFor($photo->original_path);

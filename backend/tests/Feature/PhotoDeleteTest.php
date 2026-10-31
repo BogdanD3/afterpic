@@ -44,7 +44,7 @@ class PhotoDeleteTest extends TestCase
 
         $this->deleteJson("/api/photos/{$photo->uuid}", [], $this->adminHeaders())->assertNoContent();
 
-        $this->getJson('/api/photos')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($this->photosUrl())->assertOk()->assertJsonCount(0, 'data');
         $this->getJson("/api/photos/{$photo->uuid}")->assertNotFound();
     }
 
@@ -113,14 +113,14 @@ class PhotoDeleteTest extends TestCase
         $this->assertDatabaseHas('photos', ['uuid' => $photo->uuid]);
     }
 
-    public function test_admin_routes_do_not_exist_when_no_admin_token_is_configured(): void
+    public function test_admin_token_does_nothing_when_none_is_configured(): void
     {
         config(['photos.admin_token' => null]);
 
         $photo = $this->storedPhoto();
 
         $this->deleteJson("/api/photos/{$photo->uuid}", [], ['X-Admin-Token' => ''])
-            ->assertNotFound();
+            ->assertUnauthorized();
 
         $this->assertDatabaseHas('photos', ['uuid' => $photo->uuid]);
     }

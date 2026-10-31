@@ -17,7 +17,7 @@ class PhotoGalleryTest extends TestCase
         Photo::factory()->failed()->create();
         $newer = Photo::factory()->create();
 
-        $response = $this->getJson('/api/photos');
+        $response = $this->getJson($this->photosUrl());
 
         $response->assertOk()->assertJsonCount(2, 'data');
         $response->assertJsonPath('data.0.uuid', $newer->uuid);
@@ -31,7 +31,7 @@ class PhotoGalleryTest extends TestCase
         $created = Photo::factory()->count(5)->create();
 
         $seen = [];
-        $path = '/api/photos';
+        $path = $this->photosUrl();
 
         while ($path !== null) {
             $response = $this->getJson($path)->assertOk();
@@ -47,13 +47,13 @@ class PhotoGalleryTest extends TestCase
     {
         Photo::factory()->count(30)->create();
 
-        $response = $this->getJson('/api/photos');
+        $response = $this->getJson($this->photosUrl());
 
         $response->assertOk()->assertJsonCount(24, 'data');
 
         // A path, never an absolute URL: behind a proxy the host would be wrong.
-        $this->assertStringStartsWith('/api/photos?cursor=', $response->json('links.next'));
-        $this->assertSame('/api/photos', $response->json('meta.path'));
+        $this->assertStringStartsWith($this->photosUrl().'?cursor=', $response->json('links.next'));
+        $this->assertSame($this->photosUrl(), $response->json('meta.path'));
 
         $this->getJson($response->json('links.next'))->assertOk()->assertJsonCount(6, 'data');
     }
@@ -63,7 +63,7 @@ class PhotoGalleryTest extends TestCase
         Photo::factory()->count(3)->create();
         config(['photos.per_page' => 1]);
 
-        $cursor = $this->getJson('/api/photos')->json('meta.next_cursor');
+        $cursor = $this->getJson($this->photosUrl())->json('meta.next_cursor');
         $decoded = json_decode(base64_decode(strtr($cursor, '-_', '+/')), true);
 
         $this->assertArrayNotHasKey('id', $decoded);
@@ -74,10 +74,10 @@ class PhotoGalleryTest extends TestCase
     {
         Photo::factory()->create();
 
-        $photo = $this->getJson('/api/photos')->json('data.0');
+        $photo = $this->getJson($this->photosUrl())->json('data.0');
 
         $this->assertEqualsCanonicalizing(
-            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at'],
+            ['uuid', 'thumb_url', 'web_url', 'width', 'height', 'created_at', 'uploader_name'],
             array_keys($photo),
         );
     }
@@ -120,7 +120,7 @@ class PhotoGalleryTest extends TestCase
 
     public function test_updates_require_a_cursor(): void
     {
-        $this->getJson('/api/photos/updates')
+        $this->getJson($this->photosUrl().'/updates')
             ->assertUnprocessable()
             ->assertJsonValidationErrorFor('cursor');
     }
@@ -142,7 +142,7 @@ class PhotoGalleryTest extends TestCase
 
     public function test_responses_include_security_headers(): void
     {
-        $this->getJson('/api/photos')
+        $this->getJson($this->photosUrl())
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'DENY');
     }

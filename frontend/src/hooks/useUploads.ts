@@ -32,7 +32,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Nepoznata greška.'
 }
 
-export function useUploads(onProcessed: (photo: Photo) => void) {
+/** Photos this phone is sending to the room `code`, one after another. */
+export function useUploads(code: string, onProcessed: (photo: Photo) => void) {
   const [items, setItems] = useState<UploadItem[]>([])
   const itemsRef = useRef(items)
   const onProcessedRef = useRef(onProcessed)
@@ -63,7 +64,7 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
       for (let attempt = 0; ; attempt++) {
         try {
           // The item id is the upload id, so every retry of this photo is recognised.
-          const { uuid } = await uploadPhoto(file, id, (progress) => updateItem(id, { progress }))
+          const { uuid } = await uploadPhoto(code, file, id, (progress) => updateItem(id, { progress }))
 
           updateItem(id, { status: 'processing', uuid, progress: 1, processingSince: Date.now() })
 
@@ -82,7 +83,7 @@ export function useUploads(onProcessed: (photo: Photo) => void) {
         }
       }
     },
-    [updateItem],
+    [code, updateItem],
   )
 
   const enqueue = useCallback(

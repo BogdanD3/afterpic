@@ -35,14 +35,19 @@ export function validateFile(file: File): string | null {
   return null
 }
 
-function resolveUrl(path: string): string {
+export function resolveUrl(path: string): string {
   return `${API_BASE}${path}`
 }
 
-async function getJson<T>(path: string): Promise<T | null> {
+/**
+ * GET as JSON. 304 gives null. 404 gives null too, unless `notFound` is
+ * 'throw': for a room's gallery a 404 means the room is gone, which the page
+ * must show instead of quietly showing nothing.
+ */
+export async function getJson<T>(path: string, notFound: 'null' | 'throw' = 'null'): Promise<T | null> {
   const response = await fetch(resolveUrl(path), { headers: { Accept: 'application/json' } })
 
-  if (response.status === 404 || response.status === 304) {
+  if (response.status === 304 || (response.status === 404 && notFound === 'null')) {
     return null
   }
 
@@ -53,20 +58,25 @@ async function getJson<T>(path: string): Promise<T | null> {
   return (await response.json()) as T
 }
 
+export function roomPhotosPath(code: string): string {
+  return `/api/rooms/${encodeURIComponent(code)}/photos`
+}
+
 /**
- * `path` is the first page or a `links.next` path from the previous page
- * (the backend sends paths without host, so they work behind any proxy).
+ * `path` is the room's first page or a `links.next` path from the previous
+ * page (the backend sends paths without host, so they work behind any
+ * proxy). Throws ApiError 404 when the room no longer exists.
  */
-export function fetchGalleryPage(path = '/api/photos'): Promise<GalleryPage | null> {
-  return getJson<GalleryPage>(path)
+export function fetchGalleryPage(path: string): Promise<GalleryPage | null> {
+  return getJson<GalleryPage>(path, 'throw')
 }
 
 /**
  * `cursor` is opaque: the first one comes from the gallery page, every next
- * one from the previous updates answer.
+ * one from the previous updates answer. Null when nothing changed (304).
  */
-export function fetchUpdates(cursor: string): Promise<UpdatesPage | null> {
-  return getJson<UpdatesPage>(`/api/photos/updates?cursor=${encodeURIComponent(cursor)}`)
+export function fetchUpdates(code: string, cursor: string): Promise<UpdatesPage | null> {
+  return getJson<UpdatesPage>(`${roomPhotosPath(code)}/updates?cursor=${encodeURIComponent(cursor)}`, 'throw')
 }
 
 export async function fetchPhoto(uuid: string): Promise<Photo | null> {
@@ -86,13 +96,34 @@ export async function fetchPhotoStatus(uuid: string): Promise<PhotoStatus | null
   return body?.status ?? null
 }
 
+/** The keys a page holds: the super admin token and the room's key (host or room admin). */
+export interface AdminKeys {
+  adminToken: string | null
+  roomKey: string | null
+}
+
+export function adminHeaders(keys: AdminKeys): Record<string, string> {
+  const headers: Record<string, string> = {}
+
+  if (keys.adminToken) {
+    headers['X-Admin-Token'] = keys.adminToken
+  }
+
+  if (keys.roomKey) {
+    headers['X-Room-Key'] = keys.roomKey
+  }
+
+  return headers
+}
+
 /**
- * Admin only: delete a photo (row and files). Throws ApiError when refused.
+ * Delete a photo (row and files) as super admin, event host or room admin.
+ * Throws ApiError when refused.
  */
-export async function deletePhoto(uuid: string, adminToken: string): Promise<void> {
+export async function deletePhoto(uuid: string, keys: AdminKeys): Promise<void> {
   const response = await fetch(resolveUrl(`/api/photos/${uuid}`), {
     method: 'DELETE',
-    headers: { 'X-Admin-Token': adminToken },
+    headers: adminHeaders(keys),
   })
 
   if (!response.ok) {
@@ -226,6 +257,14 @@ function uploadErrorMessage(status: number, body: unknown): string {
       : 'Previše slika u kratkom roku. Pokušajte kasnije.'
   }
 
+  if (status === 403) {
+    return 'Slanje fotografija je zatvoreno.'
+  }
+
+  if (status === 404) {
+    return 'Ova galerija više ne postoji.'
+  }
+
   if (status === 413) {
     return 'Fotografija je prevelika (maks. 50 MB).'
   }
@@ -264,6 +303,7 @@ export function isRetryableUploadError(error: unknown): boolean {
  * instead of creating a duplicate.
  */
 export function uploadPhoto(
+  roomCode: string,
   file: File,
   uploadId: string,
   onProgress: (fraction: number) => void,
@@ -279,7 +319,7 @@ export function uploadPhoto(
       stallTimer = window.setTimeout(() => request.abort(), UPLOAD_STALL_TIMEOUT_MS)
     }
 
-    request.open('POST', resolveUrl('/api/photos'))
+    request.open('POST', resolveUrl(roomPhotosPath(roomCode)))
     // Sends the device cookie the upload limits count by, also when the API is on another origin.
     request.withCredentials = true
     request.setRequestHeader('Accept', 'application/json')
@@ -320,4 +360,18 @@ export function uploadPhoto(
     restartStallTimer()
     request.send(form)
   })
+}
+
+/** Any guest asks the organiser to remove a photo, with a reason. */
+export async function requestPhotoRemoval(uuid: string, reason: string): Promise<void> {
+  const response = await fetch(resolveUrl(`/api/photos/${uuid}/removal-request`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+
+  if (!response.ok) {
+    throw new ApiError(response.status, response.status === 429 ? 'Previše zahtjeva. Pokušajte kasnije.' : 'Zahtjev nije poslan.')
+  }
 }

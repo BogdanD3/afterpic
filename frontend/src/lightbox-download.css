@@ -45,3 +45,46 @@
   background: #0f172a;
   color: #fff;
 }
+
+.lightbox-caption {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top));
+  left: 16px;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #fff;
+  font-size: 14px;
+}
+
+/* Super admin only: who sent the photo. Above the download buttons. */
+.moderation {
+  position: absolute;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  transform: translateX(-50%);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+}
+
+.moderation button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
